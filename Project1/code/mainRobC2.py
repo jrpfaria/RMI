@@ -34,7 +34,7 @@ class MyRob(CRobLinkAngs):
 
         map = [[" "] * MAP_COLS] * MAP_ROWS
 
-        target = (0, 0)
+        target = previous_target = (0, 0)
         offsets = (0 - self.measures.x, 0 - self.measures.y)
 
         map[MAP_ROWS // 2][MAP_COLS // 2] = "I"
@@ -58,19 +58,14 @@ class MyRob(CRobLinkAngs):
             heading = self.measures.compass // 45
 
             if (coordinates == target):
+                previous_target = target
                 target = changeTarget(target, heading)
 
             # print(coordinates, heading)
             speed = calculateSpeed(coordinates, target, heading)
-            
-            if (heading % 4 == 0):
-                error = calculateError(coordinates, target, 'y')
-            elif (heading == 2 or heading == -2):
-                error = calculateError(coordinates, target, 'x')
-            else:
-                error = calculateError(coordinates, target, 'xy') 
+            error = calculateError(coordinates, target, previous_target)
 
-            print(speed, error)
+            # print(speed, error)
 
             if '1' not in line[2:5]:
                 turn = readjustToLine(lineHistory)

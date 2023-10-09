@@ -1,5 +1,5 @@
 from typing import List
-from math import sqrt
+from math import sqrt, atan2
 
 def writeMapToFile(mapa: List[List], output: str) -> None:
     with open(output, "w") as file:
@@ -30,18 +30,12 @@ def calculateSpeed(actual, target, heading):
     return 0.15 if sqrt(pow(aux, 2) + pow(aux2, 2)) > 0.5 else 0.05
 
 
-def calculateError(actual, target, select):
+def calculateError(actual, target, previous_target):
     x, y = actual
     target_x, target_y = target
+    ptarget_x, ptarget_y = previous_target
 
-    if select == 'x':
-        return target_x - x
-    
-    if select == 'y':
-        return target_y - y
-    
-    if select == 'xy':
-        return 0
+    return 0.01 * (atan2(target_y - y, target_x - x) - atan2(target_x - ptarget_x, target_y - ptarget_y))
 
 
 def changeTarget(target, heading):
