@@ -4,8 +4,6 @@ from croblink import *
 from math import *
 import xml.etree.ElementTree as ET
 
-from utilsC2 import *
-
 CELLROWS=7
 CELLCOLS=14
 
@@ -27,69 +25,64 @@ class MyRob(CRobLinkAngs):
             print("Connection refused or error")
             quit()
 
-        self.readSensors()
-
-        MAP_ROWS=21
-        MAP_COLS=49
-
-        map = [[" "] * MAP_COLS] * MAP_ROWS
-
-        target = previous_target = (0, 0)
-        offsets = (0 - self.measures.x, 0 - self.measures.y)
-
-        map[MAP_ROWS // 2][MAP_COLS // 2] = "I"
-
-        lineHistory = []        
+        state = 'stop'
+        stopped_state = 'run'
 
         while True:
             self.readSensors()
 
-            line = self.measures.lineSensor
-            print_sensor_readings(line)
+            if self.measures.endLed:
+                print(self.robName + " exiting")
+                quit()
 
-            # Register last 5 readingsfrom line sensor
-            lineHistory.append(line)
-            if len(lineHistory) > 5:
-                lineHistory.pop(0)
+            if state == 'stop' and self.measures.start:
+                state = stopped_state
+
+            if state != 'stop' and self.measures.stop:
+                stopped_state = state
+                state = 'stop'
+
+            if state == 'run':
+                if self.measures.visitingLed==True:
+                    state='wait'
+                if self.measures.ground==0:
+                    self.setVisitingLed(True);
+                self.wander()
+            elif state=='wait':
+                self.setReturningLed(True)
+                if self.measures.visitingLed==True:
+                    self.setVisitingLed(False)
+                if self.measures.returningLed==True:
+                    state='return'
+                self.driveMotors(0.0,0.0)
+            elif state=='return':
+                if self.measures.visitingLed==True:
+                    self.setVisitingLed(False)
+                if self.measures.returningLed==True:
+                    self.setReturningLed(False)
+                self.wander()
             
-            # Position data
-            coordinates = (self.measures.x + offsets[0], self.measures.y + offsets[1]) 
-            
-            heading = calculateHeading(self.measures.compass)
 
-            # self.driveMotors(0.15, 0.15)
-
-            # if '1' not in line:
-            #     # ver o historico e decidir onde ir
-            #     turn = readjustToLine(lineHistory)
-
-            print(coordinates, target)
-
-            if (euclidean_distance(coordinates, target) < 0.1):
-                if line[2:5] == ['1', '1', '1']:
-                    previous_target = target
-                    target = changeTarget(target, heading)
-                else: 
-                    readjustToLine(lineHistory)
-            
-                
-            speed = calculateSpeed(coordinates, target, heading)
-            error = calculateError(coordinates, target, previous_target)
-
-            print(speed, error)
-
-            if '1' not in line[2:5]:
-                print("readjusting")
-                turn = readjustToLine(lineHistory)
-                self.driveMotors(turn[0], turn[1])
-            else:
-                print("driving")
-                self.driveMotors(0.15, 0.15)
-
-            # printMap(MAP)
-
-
-            # self.finish()
+    def wander(self):
+        center_id = 0
+        left_id = 1
+        right_id = 2
+        back_id = 3
+        if    self.measures.irSensor[center_id] > 5.0\
+           or self.measures.irSensor[left_id]   > 5.0\
+           or self.measures.irSensor[right_id]  > 5.0\
+           or self.measures.irSensor[back_id]   > 5.0:
+            print('Rotate left')
+            self.driveMotors(-0.1,+0.1)
+        elif self.measures.irSensor[left_id]> 2.7:
+            print('Rotate slowly right')
+            self.driveMotors(0.1,0.0)
+        elif self.measures.irSensor[right_id]> 2.7:
+            print('Rotate slowly left')
+            self.driveMotors(0.0,0.1)
+        else:
+            print('Go')
+            self.driveMotors(0.1,0.1)
 
 class Map():
     def __init__(self, filename):

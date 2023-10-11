@@ -4,7 +4,7 @@ from croblink import *
 from math import *
 import xml.etree.ElementTree as ET
 
-from utilsC2 import *
+from utilsC1 import center_of_mass, get_base
 
 CELLROWS=7
 CELLCOLS=14
@@ -27,69 +27,76 @@ class MyRob(CRobLinkAngs):
             print("Connection refused or error")
             quit()
 
-        self.readSensors()
 
-        MAP_ROWS=21
-        MAP_COLS=49
+        # Constants for PID controller
+        Kp = 2.9000  # Proportional constant
+        Ki = 0.0000  # Integral constant
+        Kd = 0.0000  # Derivative constant
 
-        map = [[" "] * MAP_COLS] * MAP_ROWS
+        # Initialize variables for PID controller
+        last_error = 0
+        integral = 0
 
-        target = previous_target = (0, 0)
-        offsets = (0 - self.measures.x, 0 - self.measures.y)
+        step = 0.08
+        n_sensor = 7
+        base = get_base(n_sensor, step)
+        base_speed = 0.15
 
-        map[MAP_ROWS // 2][MAP_COLS // 2] = "I"
-
-        lineHistory = []        
+        history = [0, 0, 0]
+        max_history_size = 3
 
         while True:
+
+            # Read sensor values (0s and 1s)
             self.readSensors()
 
+            # print(self.measures.lineSensor)
+
             line = self.measures.lineSensor
-            print_sensor_readings(line)
 
-            # Register last 5 readingsfrom line sensor
-            lineHistory.append(line)
-            if len(lineHistory) > 5:
-                lineHistory.pop(0)
-            
-            # Position data
-            coordinates = (self.measures.x + offsets[0], self.measures.y + offsets[1]) 
-            
-            heading = calculateHeading(self.measures.compass)
+            backup = 0
+            if '1' not in line:
+                while (True):
+                    self.readSensors()
+                    line = self.measures.lineSensor
+                    self.driveMotors(-0.1, -0.1)
+                    if '1' in line:
+                        backup += 1
+                    if backup == 3:
+                        break
 
-            # self.driveMotors(0.15, 0.15)
+            # Calculate the error
+            error = center_of_mass(line, step, base) - base
 
-            # if '1' not in line:
-            #     # ver o historico e decidir onde ir
-            #     turn = readjustToLine(lineHistory)
+            history.append(error)
 
-            print(coordinates, target)
+            if len(history) > max_history_size:
+                history.pop(0)
 
-            if (euclidean_distance(coordinates, target) < 0.1):
-                if line[2:5] == ['1', '1', '1']:
-                    previous_target = target
-                    target = changeTarget(target, heading)
-                else: 
-                    readjustToLine(lineHistory)
-            
-                
-            speed = calculateSpeed(coordinates, target, heading)
-            error = calculateError(coordinates, target, previous_target)
+            history = sorted(history)
 
-            print(speed, error)
+            error = history[1]
 
-            if '1' not in line[2:5]:
-                print("readjusting")
-                turn = readjustToLine(lineHistory)
-                self.driveMotors(turn[0], turn[1])
-            else:
-                print("driving")
-                self.driveMotors(0.15, 0.15)
+            # Calculate the integral term
+            integral += error
 
-            # printMap(MAP)
+            # Calculate the derivative term
+            derivative = error - last_error
+            last_error = error
 
+            # Calculate the control output (PID)
+            control = Kp * error + Ki * integral + Kd * derivative
 
-            # self.finish()
+            # Calculate motor powers
+            left_power = base_speed + control
+            right_power = base_speed - control
+
+            # Ensure motor powers are within the valid range (-0.15 to 0.15)
+            left_power = min(max(left_power, -0.15), +0.15)
+            right_power = min(max(right_power, -0.15), +0.15)
+
+            # Drive motors with adjusted power
+            self.driveMotors(left_power, right_power)
 
 class Map():
     def __init__(self, filename):
@@ -142,5 +149,5 @@ if __name__ == '__main__':
     if mapc != None:
         rob.setMap(mapc.labMap)
         rob.printMap()
-    
+
     rob.run()
