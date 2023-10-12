@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
                 DriveMotors(0.15, 0.15);
             }
             else{
-                correct(err_mem, linemem, decision); 
+                correct(err_mem, linemem, 0); 
             }
 
         // Basic error correction
@@ -177,7 +177,7 @@ double error(bool *line)
     int i, j, k;
      
     // Lookup table for error correction
-    double lut_error[12] = {0, 1, 2, 0.05, 4, 0.03, 6, 7, 0.13, 9, 10, 0.08};
+    double lut_error[12] = {0, 1, 2, 0.05, 4, 0.01, 6, 7, 0.13, 9, 10, 0.08};
     int left = 0;
     int right = 0;
 
