@@ -20,21 +20,16 @@
 #define true 1
 #define false 0
 
-void drive(int orientation, double target_x, double target_y, double gps_x, double gps_y);
-void align(bool linemem[][7]);
+int correct(double *errors, bool lines[][7], int decision);
+double error(bool *line);
 
 int main(int argc, char *argv[])
 {   
-    // C1 related
+    int decision = 0;
     double err = 0;
     double errors[3];
-    bool linemem[3][7];
-
-    // C2 related
-    double target[2] = {0, 0};
-    double world[21][49]; 
-    bool aligned = 1;
-
+    double err_mem[3];
+    bool linemem[5][7];
     char host[100]="localhost";
     char rob_name[20]="robsample";
     float lPow,rPow;
@@ -96,11 +91,6 @@ int main(int argc, char *argv[])
     }
     printf( "%s Connected\n", rob_name );
     state=STOP;
-
-    // C2 related
-    ReadSensors();
-    double offsets[] = {GetX(), GetY()};
-
     while(1)
     {
         /* Reading next values from Sensors */
@@ -124,94 +114,133 @@ int main(int argc, char *argv[])
             stoppedState=state;
             state=STOP; /* Interrupt */
         }
-        
-        // Line reading history
-        int i;
-        for(i = 0; i < 2; i++) memcpy(linemem[i], linemem[i+1], 7);
-        memcpy(linemem[2], line, 7);
-
-        aligned = (line[2] && line[3] && line[4]);
 
         // My code:
-        double pos_x = GetX() - offsets[0];
-        double pos_y = GetY() - offsets[1];
-        double compass = GetCompassSensor();
+        // Count ammount of 1's in line
+        int i, j;
+        for (i = 0, j = 7; i < 7; i++)
+            if (!line[i]) j--;
 
-        int orientation = (int) (compass / 45);
+        // j = amount of 1's detected by the line sensor
+        // Discard useless data
+        if (j > 1 && j < 6){
+            // Update line history (5 readings)
+            for(i = 0; i < 4; i++) memcpy(linemem[i], linemem[i+1], 7);
+            memcpy(linemem[4], line, 7);
+            
+            // Calculate error for the current line reading
+            err = error(line);
         
-        // Print values for debugging
-        // printf("X: %f\n", pos_x);
-        // printf("Y: %f\n", pos_y);
-        // printf("Compass: %f\n", compass);
+            // Update error history (5 readings)
+            for(i = 0; i < 2; i++) errors[i] = errors[i+1];
+            errors[2] = err;
 
-        if (pos_x == target[0] && pos_y == target[1]){
-            fprintf(stderr, "Target reached\n");
-            if (aligned){
-                // turn the next switch into if statements
-                if (orientation == 0) target[0] += 2.0;
-                else if (orientation == 1) target[0] += 2.0, target[1] -= 2.0;
-                else if (orientation == 2) target[1] -= 2.0;
-                else if (orientation == 3) target[0] -= 2.0, target[1] -= 2.0;
-                else if (orientation == -1) target[0] += 2.0, target[1] += 2.0;
-                else if (orientation == -2) target[1] += 2.0;
-                else if (orientation == -3) target[0] -= 2.0, target[1] += 2.0;
-                else if (orientation == -4 || orientation == 4) target[0] -= 2.0;
+            // Calculate errors median
+            double aux;
+            for(i = 0; i < 2; i++)
+                if (errors[i] > errors[i+1]){
+                    aux = errors[i+1];
+                    errors[i+1] = errors[i];
+                    errors[i] = aux;
+                }
+            err = errors[1];
+            
+            if (err != 0){
+                for(i = 0; i < 2; i++) err_mem[i] = err_mem[i+1];
+                err_mem[2] = err;
+            }    
+        }
+
+        // Act on error
+        // if (j == 0) implementar algo como o rui
+        // Perfect scenario
+        if (err == 0)
+            if (j == 2 || j == 3){
+                decision = 0;
+                DriveMotors(0.15, 0.15);
             }
-        }
+            else{
+                correct(err_mem, linemem, decision); 
+            }
+
+        // Basic error correction
         else
-        {
-            if (aligned)
-                drive(orientation, target[0], target[1], pos_x, pos_y);
-            else
-                align(linemem);
-        }
+            if (j == 1) decision = (decision == 0) ? 0 : correct(err_mem, linemem, decision); 
+            else DriveMotors(0.02-err,0.02+err);
     }
 
     return 1;
 }
 
-// C2 related
-void drive(int orientation, double target_x, double target_y, double gps_x, double gps_y)
+double error(bool *line)
 {
-    double speed = 0.0;
-    double aux = 0.0;
-    double aux2 = 0.0;
+    int i, j, k;
+     
+    // Lookup table for error correction
+    double lut_error[12] = {0, 1, 2, 0.05, 4, 0.03, 6, 7, 0.13, 9, 10, 0.08};
+    int left = 0;
+    int right = 0;
 
-    // fprintf(stderr, "\nDrive\n");
-    fprintf(stderr, "Target: %f, %f\n", target_x, target_y);
-    fprintf(stderr, "GPS: %f, %f\n", gps_x, gps_y);
-    // fprintf(stderr, "Orientation: %d\n", orientation);
-
-    if (abs(orientation) == 4 || orientation == 0){   
-        aux = (target_x - gps_x);     
-        aux *= aux >= 0 ? 1 : -1;
-        speed = aux > 0.5 ? 0.15 : 0.02; 
-    }
-    else if (abs(orientation) == 2){
-        aux = (target_y - gps_y);
-        aux *= aux > 0 ? 1 : -1;
-        speed = aux > 0.5 ? 0.15 : 0.02;
-    }
-    else{
-        aux = (target_x - gps_x);
-        aux2 = (target_y - gps_y);     
-        speed = (aux*aux)+(aux2*aux2) > 0.5 ? 0.15 : 0.02;
+    // Calculate error
+    // using the 5 central bits of the line sensor, split into groups of 4
+    for (i = 1, j = 5, k = 8; i < 5; i++, j--)
+    {
+        left += line[i] * k;
+        right += line[j] * k;
+        k = (k >> 1);
     }
 
-    fprintf(stderr, "Speed: %f\n", speed);
-    DriveMotors(speed, speed);
+    // Use absolute value of error to index lookup table
+    int error = abs(left - right);
+
+    // Return error correction
+    double necessaryCorrection = lut_error[error];
+
+    // if left is bigger than right, the robot is too much to the right, so it should turn left
+    return (left >= right) ? necessaryCorrection : necessaryCorrection * -1;
 }
 
-void align(bool linemem[][7])
-{
-    int i, j;
-    int left, right = 0;
-    for (i = 0; i < 3; i++)
-        for (j = 0; j < 2; j++)
-        {
-            left += linemem[i][j]++;
-            right += linemem[i][6 - j]++;
-        }
+int correct(double *errors, bool lines[][7], int decision)
+{  
+    int i, target = 0;
+    int e_left = 0;
+    int e_right = 0;
+
+    int l_left = 0;
+    int l_right = 0;
+
+    // bool checks_out;
+
+    // Calculate errors median
+    for(i = 0; i < 3; i++)
+        errors[i] > 0 ? e_left++ : e_right++;
     
-    (left > right) ? DriveMotors(-0.05, 0.05) : DriveMotors(0.05, -0.05); 
+    for(i = 0; i < 5; i++){
+        if (lines[i][0]) l_left++;
+        else if (lines[i][6]) l_right++;
+    }
+
+    // checks_out = ((l_left > l_right) && (e_left > e_right)) || ((l_right > l_left) && (e_right > e_left));
+
+    fprintf(stderr, "correcting...\n");
+    fprintf(stderr, "e_left: %d, e_right: %d\n", e_left, e_right);
+    fprintf(stderr, "l_left: %d, l_right: %d\n", l_left, l_right);
+
+    if (decision == 0)
+    // // Act on error
+        if (l_left  != l_right){
+            target = (l_left > l_right) ? 1 : -1;
+            target == 1 ? DriveMotors(-0.08, 0.08) : DriveMotors(0.08, -0.08);
+            return target;
+        }
+        else{
+            target = (e_left > e_right) ? 1 : -1;
+            target == 1 ? DriveMotors(-0.08, 0.08) : DriveMotors(0.08, -0.08);
+            return target;
+        }
+    else{
+        decision == 1 ? DriveMotors(-0.08, 0.08) : DriveMotors(0.08, -0.08);
+        return decision;
+    }
 }
+
