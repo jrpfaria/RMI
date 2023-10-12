@@ -20,14 +20,15 @@
 #define true 1
 #define false 0
 
-int correct(bool line[][7]);
+int correct(double *errors, bool lines[][7], int decision);
 double error(bool *line);
 
 int main(int argc, char *argv[])
 {   
-    int rotate;
+    int decision = 0;
     double err = 0;
     double errors[3];
+    double err_mem[3];
     bool linemem[5][7];
     char host[100]="localhost";
     char rob_name[20]="robsample";
@@ -98,7 +99,6 @@ int main(int argc, char *argv[])
         /* show LineSensor values */
         bool line[7];
         GetLineSensor(line);
-        fprintf(stderr,"%u: ", GetTime());
         for(int i=0;i<N_LINE_ELEMENTS;i++) {
             fprintf(stderr,"%s",line[i]?"1":"0");
         }
@@ -144,15 +144,29 @@ int main(int argc, char *argv[])
                     errors[i] = aux;
                 }
             err = errors[1];
+            
+            if (err != 0){
+                for(i = 0; i < 2; i++) err_mem[i] = err_mem[i+1];
+                err_mem[2] = err;
+            }    
         }
 
         // Act on error
         // if (j == 0) implementar algo como o rui
         // Perfect scenario
-        if (err == 0 && j == 3)
-            DriveMotors(0.13, 0.13);
+        if (err == 0)
+            if (j == 2 || j == 3){
+                decision = 0;
+                DriveMotors(0.15, 0.15);
+            }
+            else{
+                correct(err_mem, linemem, 0); 
+            }
+
         // Basic error correction
-        else DriveMotors(0.02-err,0.02+err);
+        else
+            if (j == 1) decision = (decision == 0) ? 0 : correct(err_mem, linemem, decision); 
+            else DriveMotors(0.02-err,0.02+err);
     }
 
     return 1;
@@ -161,9 +175,9 @@ int main(int argc, char *argv[])
 double error(bool *line)
 {
     int i, j, k;
-    
+     
     // Lookup table for error correction
-    double lut_error[12] = {0, 1, 2, 0.08, 4, 0.08, 6, 7, 0.13, 9, 10, 0.08};
+    double lut_error[12] = {0, 1, 2, 0.05, 4, 0.01, 6, 7, 0.13, 9, 10, 0.08};
     int left = 0;
     int right = 0;
 
@@ -186,42 +200,47 @@ double error(bool *line)
     return (left >= right) ? necessaryCorrection : necessaryCorrection * -1;
 }
 
-int correct(bool line[][7])
+int correct(double *errors, bool lines[][7], int decision)
 {  
-    int i, j, k;
-    int left = 0;
-    int right = 0;
-    int turn = 0;
+    int i, target = 0;
+    int e_left = 0;
+    int e_right = 0;
 
-    // print line arrays
-    fprintf(stderr, "line memory:\n");
-    for (i = 0; i < 3; i++){
-        for (j = 0; j < 7; j++)
-            fprintf(stderr, "%d", line[i][j]);
-        fprintf(stderr, "\n");
+    int l_left = 0;
+    int l_right = 0;
+
+    // bool checks_out;
+
+    // Calculate errors median
+    for(i = 0; i < 3; i++)
+        errors[i] > 0 ? e_left++ : e_right++;
+    
+    for(i = 0; i < 5; i++){
+        if (lines[i][0]) l_left++;
+        else if (lines[i][6]) l_right++;
     }
 
-    // Check for hooks
-    for (i = 0; i < 3; i++){
-        if (line[i][0]) left++;
-        if (line[i][6]) right++;
-    }
-    turn += (left - right);
+    // checks_out = ((l_left > l_right) && (e_left > e_right)) || ((l_right > l_left) && (e_right > e_left));
 
-    // Failed to pick up hook
-    if (turn == 0)
-        for (i = 0; i < 3; i++){
-            if (line[i][1]) left++;
-            if (line[i][5]) right++;
+    fprintf(stderr, "correcting...\n");
+    fprintf(stderr, "e_left: %d, e_right: %d\n", e_left, e_right);
+    fprintf(stderr, "l_left: %d, l_right: %d\n", l_left, l_right);
+
+    if (decision == 0)
+    // // Act on error
+        if (l_left  != l_right){
+            target = (l_left > l_right) ? 1 : -1;
+            target == 1 ? DriveMotors(-0.08, 0.08) : DriveMotors(0.08, -0.08);
+            return target;
         }
-    turn += (left - right);
-
-    fprintf(stderr, "-- %d --\n", turn);
-
-    // No proper memory
-    if (turn == 0) return 0;
-
-    // Left / Right turn
-    turn = (turn > 0) ? 1 : -1;
-    return turn;
+        else{
+            target = (e_left > e_right) ? 1 : -1;
+            target == 1 ? DriveMotors(-0.08, 0.08) : DriveMotors(0.08, -0.08);
+            return target;
+        }
+    else{
+        decision == 1 ? DriveMotors(-0.08, 0.08) : DriveMotors(0.08, -0.08);
+        return decision;
+    }
 }
+
