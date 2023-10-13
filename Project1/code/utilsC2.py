@@ -36,57 +36,11 @@ def calculateSpeed(actual, target, heading):
     return 0.1 if sqrt(pow(aux, 2) + pow(aux2, 2)) > 0.5 else 0.05
 
 
-def calculateError(actual, target, previous_target):
+def calculateError(actual, target):
     x, y = actual
     target_x, target_y = target
-    ptarget_x, ptarget_y = previous_target
 
-    return 0.01 * (atan2(target_y - y, target_x - x) - atan2(target_x - ptarget_x, target_y - ptarget_y))
-
-def calculateHeading(compass):
-    if -22.5 < compass < 22.5:
-        return 0
-    if 22.5 < compass < 67.5:
-        return 1
-    if 67.5 < compass < 112.5:
-        return 2
-    if 112.5 < compass < 157.5:
-        return 3
-    if 157.5 < compass <= 180 or -180 <= compass < -157.5:
-        return 4
-    if -157.5 < compass < -112.5:
-        return -3
-    if -112.5 < compass < -67.5:
-        return -2
-    if -67.5 < compass < -22.5:
-        return -1
-
-def changeTarget(target, heading):
-    target_x, target_y = target
-
-    if heading == 0:
-        return (target_x + 2, target_y)
-    
-    if heading == 1:
-        return (target_x + 2, target_y - 2)
-
-    if heading == 2:
-        return (target_x, target_y - 2)
-    
-    if heading == 3:
-        return (target_x - 2, target_y - 2)
-    
-    if heading == -1:
-        return (target_x + 2, target_y + 2)
-    
-    if heading == -2:
-        return (target_x, target_y + 2)
-    
-    if heading == -3:
-        return (target_x - 2, target_y + 2)
-    
-    if heading == -4 or heading == 4:
-        return (target_x - 2, target_y)
+    return 0.01 * atan2(target_y - y, target_x - x)
 
 def getRotation(line_history):
     for line in line_history[-3:]:
@@ -94,16 +48,45 @@ def getRotation(line_history):
             return True
     return False
 
+def evaluateLineHistory(lineHistory):
+    paths = []
+    paths.extend(checkCenter(lineHistory[-1]))
+    paths.extend(checkSides(lineHistory))
+    return paths
 
-def readjustToLine(line_history):
-    left = right = 0
+def checkSides(lineHistory):
+    paths = []
+    hl = hr = 0
+
+    for i in range(len(lineHistory)-1):
+        if '1' in lineHistory[i][0:2]:
+            if '1' in lineHistory[i][0]:
+                if '1' in lineHistory[i][1]:
+                    hl += 1
+                elif '0' in lineHistory[i][1]:
+                    paths.append('lh')
+        if '1' in lineHistory[i][5:]:
+            if '1' in lineHistory[i][6]:
+                if '1' in lineHistory[i][5]:
+                    hr += 1
+                elif '0' in lineHistory[i][5]:
+                    paths.append('rh')
     
-    for line in enumerate(line_history):
-        if '1' in line[0:3]:
-            left += 1
-        if '1' in line[4:7]:
-            right += 1
+    if hl > 2:
+        paths.append('hl')
+    if hr > 2:
+        paths.append('hr')
+    
+    return paths
 
-    if left > right:
-        return -0.05, 0.05
-    return 0.05, -0.05
+
+def checkCenter(line):
+    paths = []
+    if '1' in line[2:5]:
+        paths.append('fwd')
+    if '1' in line[0:2]:
+        paths.append('sl')
+    if '1' in line[5:]:
+        paths.append('sr')
+
+    return paths

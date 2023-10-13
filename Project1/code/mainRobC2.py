@@ -34,8 +34,8 @@ class MyRob(CRobLinkAngs):
 
         map = [[" "] * MAP_COLS] * MAP_ROWS
 
-        target = previous_target = (0, 0)
-        offsets = (0 - self.measures.x, 0 - self.measures.y)
+        target = (2, 0)
+        offsets = (self.measures.x, self.measures.y)
 
         map[MAP_ROWS // 2][MAP_COLS // 2] = "I"
 
@@ -49,42 +49,29 @@ class MyRob(CRobLinkAngs):
 
             # Register last 5 readingsfrom line sensor
             lineHistory.append(line)
-            if len(lineHistory) > 5:
+            if len(lineHistory) > 9:
                 lineHistory.pop(0)
             
-            # Position data
-            coordinates = (self.measures.x + offsets[0], self.measures.y + offsets[1]) 
+            # Position data accounting for offsets
+            coordinates = (self.measures.x - offsets[0], self.measures.y - offsets[1]) 
             
-            heading = calculateHeading(self.measures.compass)
-
-            # self.driveMotors(0.15, 0.15)
-
             # if '1' not in line:
             #     # ver o historico e decidir onde ir
             #     turn = readjustToLine(lineHistory)
 
             print(coordinates, target)
 
-            if (euclidean_distance(coordinates, target) < 0.1):
-                if line[2:5] == ['1', '1', '1']:
-                    previous_target = target
-                    target = changeTarget(target, heading)
-                else: 
-                    readjustToLine(lineHistory)
-            
-                
-            speed = calculateSpeed(coordinates, target, heading)
-            error = calculateError(coordinates, target, previous_target)
+            in_vicinity = euclidean_distance(coordinates, target) < 0.2
+            speed = 0.01 if in_vicinity else 0.1
+            error = calculateError(coordinates, target)
 
-            print(speed, error)
-
-            if '1' not in line[2:5]:
-                print("readjusting")
-                turn = readjustToLine(lineHistory)
-                self.driveMotors(turn[0], turn[1])
-            else:
-                print("driving")
-                self.driveMotors(0.15, 0.15)
+            while (in_vicinity):
+                for i in range(10):
+                    self.readSensors()
+                    self.driveMotors(0, 0)
+                paths = evaluateLineHistory(lineHistory)
+                print(paths)
+            self.driveMotors(speed - error, speed + error)
 
             # printMap(MAP)
 
