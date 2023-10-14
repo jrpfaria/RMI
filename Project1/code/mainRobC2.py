@@ -32,12 +32,19 @@ class MyRob(CRobLinkAngs):
         MAP_ROWS=21
         MAP_COLS=49
 
-        map = [[" "] * MAP_COLS] * MAP_ROWS
+        c2_map = [[" " for _ in range(MAP_COLS)] for _ in range(MAP_ROWS)]
 
+        prev_target = aux = (0, 0)
         target = (2, 0)
         offsets = (self.measures.x, self.measures.y)
 
-        map[MAP_ROWS // 2][MAP_COLS // 2] = "I"
+        map_start_x = 24
+        map_start_y = 10
+
+        map_start = (map_start_x, map_start_y)
+        
+        c2_map[map_start_y][map_start_x] = "I"
+        c2_map[map_start_y][map_start_x + 1] = "-"
 
         lineHistory = []        
 
@@ -45,7 +52,7 @@ class MyRob(CRobLinkAngs):
             self.readSensors()
 
             line = self.measures.lineSensor
-            print_sensor_readings(line)
+            #print_sensor_readings(line)
 
             # Register last 5 readingsfrom line sensor
             lineHistory.append(line)
@@ -54,26 +61,26 @@ class MyRob(CRobLinkAngs):
             
             # Position data accounting for offsets
             coordinates = (self.measures.x - offsets[0], self.measures.y - offsets[1]) 
-            
-            # if '1' not in line:
-            #     # ver o historico e decidir onde ir
-            #     turn = readjustToLine(lineHistory)
 
-            print(coordinates, target)
+            prev_target = aux
+            # print(coordinates, target)
 
             in_vicinity = euclidean_distance(coordinates, target) < 0.2
             speed = 0.01 if in_vicinity else 0.1
-            error = calculateError(coordinates, target)
+            error = calculateError(coordinates, target, self.measures.compass)
 
             while (in_vicinity):
-                for i in range(10):
-                    self.readSensors()
-                    self.driveMotors(0, 0)
                 paths = evaluateLineHistory(lineHistory)
                 print(paths)
+                aux = target
+                target = pickPath(paths, prev_target, target)
+                c2_map = addToMap(paths, c2_map, map_start, target)
+                break
+            
+            #print("Speed: ", speed, "Error: ", error)   
             self.driveMotors(speed - error, speed + error)
 
-            # printMap(MAP)
+            print_map(c2_map)
 
 
             # self.finish()
