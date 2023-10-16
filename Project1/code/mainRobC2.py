@@ -67,21 +67,19 @@ class MyRob(CRobLinkAngs):
 
             in_vicinity = euclidean_distance(coordinates, target) < 0.2
             speed = 0.01 if in_vicinity else 0.1
-            error = calculateError(coordinates, target, self.measures.compass)
+            error = calculateError(coordinates, target, self.measures.compass, line)
 
             while (in_vicinity):
                 paths = evaluateLineHistory(lineHistory)
                 print(paths)
                 aux = target
+                c2_map = addToMap(paths, c2_map, map_start, prev_target, target)
                 target = pickPath(paths, prev_target, target)
-                c2_map = addToMap(paths, c2_map, map_start, target)
+                print_map(c2_map)
                 break
             
             #print("Speed: ", speed, "Error: ", error)   
             self.driveMotors(speed - error, speed + error)
-
-            print_map(c2_map)
-
 
             # self.finish()
 

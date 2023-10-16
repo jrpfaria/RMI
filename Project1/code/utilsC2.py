@@ -1,8 +1,5 @@
 from math import sqrt, atan2, radians, pi
 
-change = 0
-aux = [[-1, 1, '\\'], [-1, 2, '|'], [-1, 3, '/'], [0, 1, '-'], [1, 3, '\\'], [1, 2, '|'], [1, 1, '/']]
-
 def shift_rotate_list(lst, shift):
     shift %= len(lst)
     return lst[-shift:] + lst[:-shift]
@@ -42,7 +39,7 @@ def calculateSpeed(actual, target, heading):
     return 0.1 if sqrt(pow(aux, 2) + pow(aux2, 2)) > 0.5 else 0.05
 
 
-def calculateError(actual, target, compass):
+def calculateError(actual, target, compass, line):
     x, y = actual
     target_x, target_y = target
 
@@ -53,7 +50,7 @@ def calculateError(actual, target, compass):
         angle_difference += 2 * pi
     while angle_difference > pi:
         angle_difference -= 2 * pi
-
+        
     return 0.5 * angle_difference
 
 def getRotation(line_history):
@@ -104,191 +101,286 @@ def checkSides(lineHistory, paths):
 
 def checkCenter(line):
     paths = []
-    if '1' in line[2:5]:
+    if '1' in line[3]:
         paths.append('fwd')
-    if '1' in line[0:2]:
+    if '1' in line[0]:
         paths.append('sl')
-    if '1' in line[5:]:
+    if '1' in line[6]:
         paths.append('sr')
 
     return paths
 
 def pickPath(paths, prev_target, target):
-    global change
-    
     x, y = target
     px, py = prev_target
 
-    aux_x = x - px
-    aux_y = y - py
+    dx = x - px
+    dy = y - py
 
     if 'fwd' in paths:
-        change = 0
-        return (x + aux_x, y + aux_y)
+        return (x + dx, y + dy)
     
     if 'sr' in paths:
-        change = -1
         # Soft right (-45º)
-        if aux_x == 0 and aux_y > 0:
+        if dx == 0 and dy > 0:
             return (x + 2, y + 2)
-        elif aux_x == 0 and aux_y < 0:
+        elif dx == 0 and dy < 0:
             return (x - 2, y - 2)
-        elif aux_x > 0 and aux_y == 0:
+        elif dx > 0 and dy == 0:
             return (x + 2, y - 2)
-        elif aux_x < 0 and aux_y == 0:
+        elif dx < 0 and dy == 0:
             return (x - 2, y + 2)
-        elif aux_x > 0 and aux_y < 0:
+        elif dx > 0 and dy < 0:
             return (x, y - 2)
-        elif aux_x < 0 and aux_y > 0:
+        elif dx < 0 and dy > 0:
             return (x, y + 2)
-        elif aux_x > 0 and aux_y > 0:
+        elif dx > 0 and dy > 0:
             return (x + 2, y)
-        elif aux_x < 0 and aux_y < 0:
+        elif dx < 0 and dy < 0:
             return (x - 2, y)
 
     if 'sl' in paths:
-        change = 1
         # Soft left (45º)
-        if aux_x == 0 and aux_y > 0:
+        if dx == 0 and dy > 0:
             return (x - 2, y + 2)
-        elif aux_x == 0 and aux_y < 0:
+        elif dx == 0 and dy < 0:
             return (x + 2, y - 2)
-        elif aux_x > 0 and aux_y == 0:
+        elif dx > 0 and dy == 0:
             return (x + 2, y + 2)
-        elif aux_x < 0 and aux_y == 0:
+        elif dx < 0 and dy == 0:
             return (x - 2, y - 2)
-        elif aux_x > 0 and aux_y < 0:
+        elif dx > 0 and dy < 0:
             return (x + 2, y)
-        elif aux_x < 0 and aux_y > 0:
+        elif dx < 0 and dy > 0:
             return (x - 2, y)
-        elif aux_x > 0 and aux_y > 0:
+        elif dx > 0 and dy > 0:
             return (x, y + 2)
-        elif aux_x < 0 and aux_y < 0:
+        elif dx < 0 and dy < 0:
             return (x, y - 2)
 
     if 'hr' in paths:
-        change = -2
         # Handle hard right (-90º)
-        if aux_x == 0 and aux_y > 0:
+        if dx == 0 and dy > 0:
             return (x + 2, y)
-        elif aux_x == 0 and aux_y < 0:
+        elif dx == 0 and dy < 0:
             return (x - 2, y)
-        elif aux_x > 0 and aux_y == 0:
+        elif dx > 0 and dy == 0:
             return (x, y - 2)
-        elif aux_x < 0 and aux_y == 0:
+        elif dx < 0 and dy == 0:
             return (x, y + 2)
-        elif aux_x > 0 and aux_y < 0:
+        elif dx > 0 and dy < 0:
             return (x - 2, y - 2)
-        elif aux_x < 0 and aux_y > 0:
+        elif dx < 0 and dy > 0:
             return (x + 2, y + 2)
-        elif aux_x > 0 and aux_y > 0:
+        elif dx > 0 and dy > 0:
             return (x + 2, y - 2)
-        elif aux_x < 0 and aux_y < 0:
+        elif dx < 0 and dy < 0:
             return (x - 2, y + 2)
 
     if 'hl' in paths:
-        change = 2
         # Handle hard left (90º)
-        if aux_x == 0 and aux_y > 0:
+        if dx == 0 and dy > 0:
             return (x - 2, y)
-        elif aux_x == 0 and aux_y < 0:
+        elif dx == 0 and dy < 0:
             return (x + 2, y)
-        elif aux_x > 0 and aux_y == 0:
+        elif dx > 0 and dy == 0:
             return (x, y + 2)
-        elif aux_x < 0 and aux_y == 0:
+        elif dx < 0 and dy == 0:
             return (x, y - 2)
-        elif aux_x > 0 and aux_y < 0:
+        elif dx > 0 and dy < 0:
             return (x + 2, y + 2)
-        elif aux_x < 0 and aux_y > 0:
+        elif dx < 0 and dy > 0:
             return (x - 2, y - 2)
-        elif aux_x > 0 and aux_y > 0:
+        elif dx > 0 and dy > 0:
             return (x - 2, y + 2)
-        elif aux_x < 0 and aux_y < 0:
+        elif dx < 0 and dy < 0:
             return (x + 2, y - 2)
 
     if 'rh' in paths:
-        change = -3
         # Right hook (-135º)
-        if aux_x == 0 and aux_y > 0:
+        if dx == 0 and dy > 0:
             return (x + 2, y - 2)
-        elif aux_x == 0 and aux_y < 0:
+        elif dx == 0 and dy < 0:
             return (x - 2, y + 2)
-        elif aux_x > 0 and aux_y == 0:
+        elif dx > 0 and dy == 0:
             return (x - 2, y - 2)
-        elif aux_x < 0 and aux_y == 0:
+        elif dx < 0 and dy == 0:
             return (x + 2, y + 2)
-        elif aux_x > 0 and aux_y < 0:
+        elif dx > 0 and dy < 0:
             return (x - 2, y)
-        elif aux_x < 0 and aux_y > 0:
+        elif dx < 0 and dy > 0:
             return (x + 2, y)
-        elif aux_x > 0 and aux_y > 0:
+        elif dx > 0 and dy > 0:
             return (x, y - 2)
-        elif aux_x < 0 and aux_y < 0:
+        elif dx < 0 and dy < 0:
             return (x, y + 2)
 
     if 'lh' in paths:
-        change = 3
         # Left hook (135º)
-        if aux_x == 0 and aux_y > 0:
+        if dx == 0 and dy > 0:
             return (x - 2, y - 2)
-        elif aux_x == 0 and aux_y < 0:
+        elif dx == 0 and dy < 0:
             return (x + 2, y + 2)
-        elif aux_x > 0 and aux_y == 0:
+        elif dx > 0 and dy == 0:
             return (x - 2, y + 2)
-        elif aux_x < 0 and aux_y == 0:
+        elif dx < 0 and dy == 0:
             return (x + 2, y - 2)
-        elif aux_x > 0 and aux_y < 0:
+        elif dx > 0 and dy < 0:
             return (x, y + 2)
-        elif aux_x < 0 and aux_y > 0:
+        elif dx < 0 and dy > 0:
             return (x, y - 2)
-        elif aux_x > 0 and aux_y > 0:
+        elif dx > 0 and dy > 0:
             return (x - 2, y)
-        elif aux_x < 0 and aux_y < 0:
+        elif dx < 0 and dy < 0:
             return (x + 2, y)
 
     return prev_target
 
-def addToMap(paths, c2_map, map_start, target):
-    global aux
-    global change
+def addToMap(paths, c2_map, map_start, prev_target, target):
+    mx, my = map_start
+    x, y = target
+    px, py = prev_target
 
-    direction_dict = {'lh': 0, 'hl': 1, 'sl': 2, 'fwd': 3, 'sr': 4, 'hr': 5, 'rh': 6}
-    
-    aux = shift_rotate_list(aux, -change)
-    print(aux)
+    # y - line
+    # x - column
 
-    map_x, map_y = map_start
-    target_x, target_y = target
-    
-    pos_x = map_x + target_x
-    pos_y = map_y + target_y
+    dx = x - px # column
+    dy = y - py # row
+
+    cx = mx + x
+    cy = my - y
+
+    # y subir -> -1
+    # y descer -> +1
+    # x subit -> +1
+    # x descer -> -1
+
+    print(cx, cy)
 
     if 'fwd' in paths:
-        to_print = aux[direction_dict['fwd']]
-        c2_map[pos_y + to_print[0]][pos_x + to_print[1]] = to_print[2]
+        if dx == 0 and dy > 0:
+            c2_map[cy - 1][cx] = "|"
+        elif dx == 0 and dy < 0:
+            c2_map[cy + 1][cx] = "|"
+        elif dx > 0 and dy == 0:
+            c2_map[cy][cx + 1] = "-"
+        elif dx < 0 and dy == 0:
+            c2_map[cy][cx - 1] = "-"
+        elif dx > 0 and dy > 0:
+            c2_map[cy - 1][cx + 1] = "/"
+        elif dx < 0 and dy > 0:
+            c2_map[cy - 1][cx - 1] = "\\"
+        elif dx > 0 and dy < 0:
+            c2_map[cy + 1][cx + 1] = "\\"
+        elif dx < 0 and dy < 0:
+            c2_map[cy + 1][cx - 1] = "/"
     
     if 'sr' in paths:
-        to_print = aux[direction_dict['sr']]
-        c2_map[pos_y + to_print[0]][pos_x + to_print[1]] = to_print[2]
+        if dx == 0 and dy > 0:
+            c2_map[cy - 1][cx + 1] = "/"
+        elif dx == 0 and dy < 0:
+            c2_map[cy + 1][cx - 1] = "/"
+        elif dx > 0 and dy == 0:
+            c2_map[cy + 1][cx + 1] = "\\"
+        elif dx < 0 and dy == 0:
+            c2_map[cy - 1][cx - 1] = "\\"
+        elif dx > 0 and dy > 0:
+            c2_map[cy][cx + 1] = "-"
+        elif dx < 0 and dy > 0:
+            c2_map[cy - 1][cx] = "|"
+        elif dx > 0 and dy < 0:
+            c2_map[cy + 1][cx] = "|"
+        elif dx < 0 and dy < 0:
+            c2_map[cy][cx - 1] = "-"
 
     if 'sl' in paths:
-        to_print = aux[direction_dict['sl']]
-        c2_map[pos_y + to_print[0]][pos_x + to_print[1]] = to_print[2]
-    
+        if dx == 0 and dy > 0:
+            c2_map[cy - 1][cx - 1] = "\\"
+        elif dx == 0 and dy < 0:
+            c2_map[cy + 1][cx + 1] = "\\"
+        elif dx > 0 and dy == 0:
+            c2_map[cy - 1][cx + 1] = "/"
+        elif dx < 0 and dy == 0:
+            c2_map[cy + 1][cx - 1] = "/"
+        elif dx > 0 and dy > 0:
+            c2_map[cy - 1][cx] = "|"
+        elif dx < 0 and dy > 0:
+            c2_map[cy][cx - 1] = "-"
+        elif dx > 0 and dy < 0:
+            c2_map[cy][cx + 1] = "-"
+        elif dx < 0 and dy < 0:
+            c2_map[cy + 1][cx] = "|"
+
     if 'hr' in paths:
-        to_print = aux[direction_dict['hr']]
-        c2_map[pos_y + to_print[0]][pos_x + to_print[1]] = to_print[2]
+        if dx == 0 and dy > 0:
+            c2_map[cy][cx + 1] = "-"
+        elif dx == 0 and dy < 0:
+            c2_map[cy][cx - 1] = "-"
+        elif dx > 0 and dy == 0:
+            c2_map[cy + 1][cx] = "|"
+        elif dx < 0 and dy == 0:
+            c2_map[cy - 1][cx] = "|"
+        elif dx > 0 and dy > 0:
+            c2_map[cy + 1][cx + 1] = "\\"
+        elif dx < 0 and dy > 0:
+            c2_map[cy - 1][cx + 1] = "/"
+        elif dx > 0 and dy < 0:
+            c2_map[cy + 1][cx - 1] = "/"
+        elif dx < 0 and dy < 0:
+            c2_map[cy - 1][cx - 1] = "\\"
 
     if 'hl' in paths:
-        to_print = aux[direction_dict['hl']]
-        c2_map[pos_y + to_print[0]][pos_x + to_print[1]] = to_print[2]
+        if dx == 0 and dy > 0:
+            c2_map[cy][cx - 1] = "-"
+        elif dx == 0 and dy < 0:
+            c2_map[cy][cx + 1] = "-"
+        elif dx > 0 and dy == 0:
+            c2_map[cy - 1][cx] = "|"
+        elif dx < 0 and dy == 0:
+            c2_map[cy + 1][cx] = "|"
+        elif dx > 0 and dy > 0:
+            c2_map[cy - 1][cx - 1] = "\\"
+        elif dx < 0 and dy > 0:
+            c2_map[cy + 1][cx - 1] = "/"
+        elif dx > 0 and dy < 0:
+            c2_map[cy - 1][cx + 1] = "/"
+        elif dx < 0 and dy < 0:
+            c2_map[cy + 1][cx + 1] = "\\"
 
     if 'rh' in paths:
-        to_print = aux[direction_dict['rh']]
-        c2_map[pos_y + to_print[0]][pos_x + to_print[1]] = to_print[2]
+        if dx == 0 and dy > 0:
+            c2_map[cy + 1][cx + 1] = "\\"
+        elif dx == 0 and dy < 0:
+            c2_map[cy - 1][cx - 1] = "\\"
+        elif dx > 0 and dy == 0:
+            c2_map[cy + 1][cx - 1] = "/"
+        elif dx < 0 and dy == 0:
+            c2_map[cy - 1][cx + 1] = "/"
+        elif dx > 0 and dy > 0:
+            c2_map[cy + 1][cx] = "|"
+        elif dx < 0 and dy > 0:
+            c2_map[cy][cx + 1] = "-"
+        elif dx > 0 and dy < 0:
+            c2_map[cy][cx - 1] = "-"
+        elif dx < 0 and dy < 0:
+            c2_map[cy - 1][cx] = "|"
 
     if 'lh' in paths:
-        to_print = aux[direction_dict['lh']]
-        c2_map[pos_y + to_print[0]][pos_x + to_print[1]] = to_print[2]
-    
+        if dx == 0 and dy > 0:
+            c2_map[cy + 1][cx - 1] = "/"
+        elif dx == 0 and dy < 0:
+            c2_map[cy - 1][cx + 1] = "/"
+        elif dx > 0 and dy == 0:
+            c2_map[cy - 1][cx - 1] = "\\"
+        elif dx < 0 and dy == 0:
+            c2_map[cy + 1][cx + 1] = "\\"
+        elif dx > 0 and dy > 0:
+            c2_map[cy][cx - 1] = "-"
+        elif dx < 0 and dy > 0:
+            c2_map[cy + 1][cx] = "|"
+        elif dx > 0 and dy < 0:
+            c2_map[cy - 1][cx] = "|"
+        elif dx < 0 and dy < 0:
+            c2_map[cy][cx + 1] = "-"
+
     return c2_map
