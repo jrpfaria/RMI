@@ -18,9 +18,9 @@ def print_map(mapa):
 def print_sensor_readings(line):
     print("".join(line))
 
-def euclidean_distance(coordinates, target):
-    x1, y1 = coordinates
-    x2, y2 = target
+def euclidean_distance(current, target):
+    x1, y1 = current.coordinates
+    x2, y2 = target.coordinates
 
     return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2))
     
@@ -39,9 +39,9 @@ def calculateSpeed(actual, target, heading):
     return 0.1 if sqrt(pow(aux, 2) + pow(aux2, 2)) > 0.5 else 0.05
 
 
-def calculateError(actual, target, compass, line):
-    x, y = actual
-    target_x, target_y = target
+def calculateError(actual, target, compass):
+    x, y = actual.coordinates
+    target_x, target_y = target.coordinates
 
     angle_to_target = atan2(target_y - y, target_x - x)
     angle_difference = angle_to_target - radians(compass)
@@ -110,136 +110,139 @@ def checkCenter(line):
 
     return paths
 
-def pickPath(paths, prev_target, target):
-    x, y = target
-    px, py = prev_target
+def pickPath(paths, prev_target, target):  
+    unknowns = []
+    x, y = target.coordinates
+    px, py = prev_target.coordinates
 
     dx = x - px
     dy = y - py
 
     if 'fwd' in paths:
-        return (x + dx, y + dy)
+        unknowns.append((x + dx, y + dy, 0))
     
     if 'sr' in paths:
         # Soft right (-45º)
         if dx == 0 and dy > 0:
-            return (x + 2, y + 2)
+            unknowns.append((x + 2, y + 2, 1))
         elif dx == 0 and dy < 0:
-            return (x - 2, y - 2)
+            unknowns.append((x - 2, y - 2, 1))
         elif dx > 0 and dy == 0:
-            return (x + 2, y - 2)
+            unknowns.append((x + 2, y - 2, 1))
         elif dx < 0 and dy == 0:
-            return (x - 2, y + 2)
+            unknowns.append((x - 2, y + 2, 1))
         elif dx > 0 and dy < 0:
-            return (x, y - 2)
+            unknowns.append((x, y - 2, 1))
         elif dx < 0 and dy > 0:
-            return (x, y + 2)
+            unknowns.append((x, y + 2, 1))
         elif dx > 0 and dy > 0:
-            return (x + 2, y)
+            unknowns.append((x + 2, y, 1))
         elif dx < 0 and dy < 0:
-            return (x - 2, y)
+            unknowns.append((x - 2, y, 1))
 
     if 'sl' in paths:
         # Soft left (45º)
         if dx == 0 and dy > 0:
-            return (x - 2, y + 2)
+            unknowns.append((x - 2, y + 2, 1))
         elif dx == 0 and dy < 0:
-            return (x + 2, y - 2)
+            unknowns.append((x + 2, y - 2, 1))
         elif dx > 0 and dy == 0:
-            return (x + 2, y + 2)
+            unknowns.append((x + 2, y + 2, 1))
         elif dx < 0 and dy == 0:
-            return (x - 2, y - 2)
+            unknowns.append((x - 2, y - 2, 1))
         elif dx > 0 and dy < 0:
-            return (x + 2, y)
+            unknowns.append((x + 2, y, 1))
         elif dx < 0 and dy > 0:
-            return (x - 2, y)
+            unknowns.append((x - 2, y, 1))
         elif dx > 0 and dy > 0:
-            return (x, y + 2)
+            unknowns.append((x, y + 2, 1))
         elif dx < 0 and dy < 0:
-            return (x, y - 2)
+            unknowns.append((x, y - 2, 1))
 
     if 'hr' in paths:
         # Handle hard right (-90º)
         if dx == 0 and dy > 0:
-            return (x + 2, y)
+            unknowns.append((x + 2, y, 2))
         elif dx == 0 and dy < 0:
-            return (x - 2, y)
+            unknowns.append((x - 2, y, 2))
         elif dx > 0 and dy == 0:
-            return (x, y - 2)
+            unknowns.append((x, y - 2, 2))
         elif dx < 0 and dy == 0:
-            return (x, y + 2)
+            unknowns.append((x, y + 2, 2))
         elif dx > 0 and dy < 0:
-            return (x - 2, y - 2)
+            unknowns.append((x - 2, y - 2, 2))
         elif dx < 0 and dy > 0:
-            return (x + 2, y + 2)
+            unknowns.append((x + 2, y + 2, 2))
         elif dx > 0 and dy > 0:
-            return (x + 2, y - 2)
+            unknowns.append((x + 2, y - 2, 2))
         elif dx < 0 and dy < 0:
-            return (x - 2, y + 2)
+            unknowns.append((x - 2, y + 2, 2))
 
     if 'hl' in paths:
         # Handle hard left (90º)
         if dx == 0 and dy > 0:
-            return (x - 2, y)
+            unknowns.append((x - 2, y, 2))
         elif dx == 0 and dy < 0:
-            return (x + 2, y)
+            unknowns.append((x + 2, y, 2))
         elif dx > 0 and dy == 0:
-            return (x, y + 2)
+            unknowns.append((x, y + 2, 2))
         elif dx < 0 and dy == 0:
-            return (x, y - 2)
+            unknowns.append((x, y - 2, 2))
         elif dx > 0 and dy < 0:
-            return (x + 2, y + 2)
+            unknowns.append((x + 2, y + 2, 2))
         elif dx < 0 and dy > 0:
-            return (x - 2, y - 2)
+            unknowns.append((x - 2, y - 2, 2))
         elif dx > 0 and dy > 0:
-            return (x - 2, y + 2)
+            unknowns.append((x - 2, y + 2, 2))
         elif dx < 0 and dy < 0:
-            return (x + 2, y - 2)
+            unknowns.append((x + 2, y - 2, 2))
 
     if 'rh' in paths:
         # Right hook (-135º)
         if dx == 0 and dy > 0:
-            return (x + 2, y - 2)
+            unknowns.append((x + 2, y - 2, 3))
         elif dx == 0 and dy < 0:
-            return (x - 2, y + 2)
+            unknowns.append((x - 2, y + 2, 3))
         elif dx > 0 and dy == 0:
-            return (x - 2, y - 2)
+            unknowns.append((x - 2, y - 2, 3))
         elif dx < 0 and dy == 0:
-            return (x + 2, y + 2)
+            unknowns.append((x + 2, y + 2, 3))
         elif dx > 0 and dy < 0:
-            return (x - 2, y)
+            unknowns.append((x - 2, y, 3))
         elif dx < 0 and dy > 0:
-            return (x + 2, y)
+            unknowns.append((x + 2, y, 3))
         elif dx > 0 and dy > 0:
-            return (x, y - 2)
+            unknowns.append((x, y - 2, 3))
         elif dx < 0 and dy < 0:
-            return (x, y + 2)
+            unknowns.append((x, y + 2, 3))
 
     if 'lh' in paths:
         # Left hook (135º)
         if dx == 0 and dy > 0:
-            return (x - 2, y - 2)
+            unknowns.append((x - 2, y - 2, 3))
         elif dx == 0 and dy < 0:
-            return (x + 2, y + 2)
+            unknowns.append((x + 2, y + 2, 3))
         elif dx > 0 and dy == 0:
-            return (x - 2, y + 2)
+            unknowns.append((x - 2, y + 2, 3))
         elif dx < 0 and dy == 0:
-            return (x + 2, y - 2)
+            unknowns.append((x + 2, y - 2, 3))
         elif dx > 0 and dy < 0:
-            return (x, y + 2)
+            unknowns.append((x, y + 2, 3))
         elif dx < 0 and dy > 0:
-            return (x, y - 2)
+            unknowns.append((x, y - 2, 3))
         elif dx > 0 and dy > 0:
-            return (x - 2, y)
+            unknowns.append((x - 2, y, 3))
         elif dx < 0 and dy < 0:
-            return (x + 2, y)
+            unknowns.append((x + 2, y, 3))
 
-    return prev_target
+    return unknowns
 
 def addToMap(paths, c2_map, map_start, prev_target, target):
     mx, my = map_start
-    x, y = target
-    px, py = prev_target
+    x, y = target.coordinates
+    px, py = prev_target.coordinates
+    
+    print(target, prev_target)
 
     # y - line
     # x - column
