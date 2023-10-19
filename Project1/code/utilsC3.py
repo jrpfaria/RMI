@@ -13,6 +13,16 @@ def get_map_string(mapa):
 
 def print_map(mapa):
     print(get_map_string(mapa), end="\r")
+    
+def get_beacon_path_string(path):
+    return "\n".join([f"{str(Node.coordinates[0])} {str(Node.coordinates[1])}" for Node in path])
+
+def print_beacon_path(path):
+    print(get_beacon_path_string(path), end="\r")
+
+def write_beacon_path_to_file(path, output = "planning.out"):
+    with open(output, "w") as file:
+        file.write(get_beacon_path_string(path))
 
 def print_sensor_readings(line):
     print("".join(line))
@@ -49,7 +59,7 @@ def calculateError(actual, target, compass):
     while angle_difference > pi:
         angle_difference -= 2 * pi
         
-    return 0.5 * angle_difference
+    return 0.420 * angle_difference
 
 def getRotation(line_history):
     for line in line_history[-3:]:

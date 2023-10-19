@@ -1,12 +1,14 @@
 import heapq  # For priority queue
 
 class Node:
-    def __init__(self, x, y, state="unknown"):
+    def __init__(self, x, y):
         self.coordinates = (x, y)
         self.g_score = float('inf')  # Initialize to infinity
         self.h_score = 0  # Heuristic score
         self.parent = None
-        self.state = state
+        
+    def __cmp__(self, other):
+        return isinstance(other, Node) and self.coordinates == other.coordinates
         
     def __eq__(self, other):
         return isinstance(other, Node) and self.coordinates == other.coordinates
@@ -26,22 +28,35 @@ class Node:
 class Graph:
     def __init__(self):
         self.nodes = set()
-        self.edges = {}  # Dictionary to store edges and their distances
+        self.edges = {}
+        self.closed_nodes = set()
+        self.open_nodes = set()
+        
+    def set_node_visited(self, node):
+        self.closed_nodes.add(node)
+        self.open_nodes.remove(node)
+        
+    def set_node_unknown(self, node):
+        self.open_nodes.add(node)
+        self.closed_nodes.remove(node)
 
     def add_node(self, node):
         self.nodes.add(node)
+        if node not in self.closed_nodes:
+            self.open_nodes.add(node)
 
     def add_edge(self, node1, node2, distance = 2):
         self.edges[(node1, node2)] = distance
-        self.edges[(node2, node1)] = distance  # Since the graph is undirected
-
-    def update_node_state(self, node, new_state):
-        if node in self.nodes:
-            node.state = new_state
+        self.edges[(node2, node1)] = distance
             
     def a_star(self, start, goal):
-        open_set = []  # Priority queue to keep track of open nodes
-        closed_set = set()  # Set to keep track of closed nodes
+        for node in self.nodes:
+            node.g_score = float('inf')
+            node.h_score = 0
+            node.parent = None
+            
+        open_set = []
+        closed_set = set()
 
         start.g_score = 0
         start.h_score = self.calculate_heuristic(start, goal)
@@ -60,7 +75,7 @@ class Graph:
                     continue
 
                 tentative_g_score = current_node.g_score + self.get_distance(current_node, neighbor)
-
+                
                 if tentative_g_score < neighbor.g_score:
                     neighbor.parent = current_node
                     neighbor.g_score = tentative_g_score
@@ -68,21 +83,25 @@ class Graph:
                     f_score = neighbor.g_score + neighbor.h_score
                     heapq.heappush(open_set, (f_score, neighbor))
 
-        return None  # If no path is found
-
-    def a_star_with_state(self, start, target_state):
-        open_set = []  # Priority queue to keep track of open nodes
-        closed_set = set()  # Set to keep track of closed nodes
+        return None
+    
+    def a_star_unknown(self, start):
+        for node in self.nodes:
+            node.g_score = float('inf')
+            node.h_score = 0
+            node.parent = None
+            
+        open_set = []
+        closed_set = set()
 
         start.g_score = 0
-        start.h_score = self.calculate_heuristic(start, start)  # Heuristic from start to itself is 0
+        start.h_score = self.calculate_heuristic(start, start)
         heapq.heappush(open_set, (start.g_score + start.h_score, start))
 
         while open_set:
             _, current_node = heapq.heappop(open_set)
 
-            if current_node.state == target_state:
-                # Reconstruct and return the path to the closest node with the target state
+            if current_node in self.open_nodes:
                 return self.reconstruct_path(start, current_node)
 
             closed_set.add(current_node)
@@ -96,21 +115,17 @@ class Graph:
                 if tentative_g_score < neighbor.g_score:
                     neighbor.parent = current_node
                     neighbor.g_score = tentative_g_score
-                    neighbor.h_score = self.calculate_heuristic(neighbor, start)  # Using heuristic to start
+                    neighbor.h_score = self.calculate_heuristic(neighbor, start)
                     f_score = neighbor.g_score + neighbor.h_score
                     heapq.heappush(open_set, (f_score, neighbor))
-
+        
         return None
     
     def calculate_heuristic(self, node, goal, method='euclidean'):
-        # You can use any heuristic function here; for simplicity, we use Manhattan distance.
         if method == 'euclidean':
             return ((node.coordinates[0] - goal.coordinates[0]) ** 2 + (node.coordinates[1] - goal.coordinates[1]) ** 2) ** 0.5
         if method == 'manhattan':
             return abs(node.coordinates[0] - goal.coordinates[0]) + abs(node.coordinates[1] - goal.coordinates[1])
-    
-    def get_nodes_with_state(self, state):
-        return [node for node in self.nodes if node.state == state]
     
     def reconstruct_path(self, start, goal):
         path = []

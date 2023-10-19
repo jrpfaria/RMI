@@ -4,10 +4,9 @@ def shift_rotate_list(lst, shift):
     shift %= len(lst)
     return lst[-shift:] + lst[:-shift]
 
-def write_map_to_file(mapa, output):
+def write_map_to_file(mapa, output = "mapping.out"):
     with open(output, "w") as file:
-        for row in mapa:
-            file.write("".join(row) + "\n")
+        file.write(get_map_string(mapa))
 
 def get_map_string(mapa):
     return "\n".join(["".join(row) for row in mapa])
@@ -37,7 +36,6 @@ def calculateSpeed(actual, target, heading):
     aux = abs(target_x - x)
     aux2 = abs(target_y - y)
     return 0.1 if sqrt(pow(aux, 2) + pow(aux2, 2)) > 0.5 else 0.05
-
 
 def calculateError(actual, target, compass):
     x, y = actual.coordinates
@@ -241,8 +239,6 @@ def addToMap(paths, c2_map, map_start, prev_target, target):
     mx, my = map_start
     x, y = target.coordinates
     px, py = prev_target.coordinates
-    
-    print(target, prev_target)
 
     # y - line
     # x - column
@@ -257,8 +253,6 @@ def addToMap(paths, c2_map, map_start, prev_target, target):
     # y descer -> +1
     # x subit -> +1
     # x descer -> -1
-
-    print(cx, cy)
 
     if 'fwd' in paths:
         if dx == 0 and dy > 0:
@@ -387,3 +381,34 @@ def addToMap(paths, c2_map, map_start, prev_target, target):
             c2_map[cy][cx + 1] = "-"
 
     return c2_map
+
+def addToMapStart(line, compass, c2_map, map_start, paths):
+    mx, my = map_start
+
+    if line[3] == '1':
+        if compass == 0:
+            c2_map[my][mx + 1] = "-"
+            paths.append((2, 0))
+        elif compass == 45:                    
+            c2_map[my - 1][mx + 1] = "/"
+            paths.append((2, 2))
+        elif compass == 90:
+            c2_map[my - 1][mx] = "|"
+            paths.append((0, 2))
+        elif compass == 135: 
+            c2_map[my - 1][mx - 1] = "\\"
+            paths.append((-2, -2))
+        elif compass == 180 or compass == -180:
+            c2_map[my][mx - 1] = "-"
+            paths.append((-2, 0))
+        elif compass == -135:
+            c2_map[my + 1][mx - 1] = "/"
+            paths.append((-2, -2))
+        elif compass == -90:
+            c2_map[my + 1][mx] = "|"
+            paths.append((0, 2))
+        elif compass == -45:
+            c2_map[my + 1][mx + 1] = "\\" 
+            paths.append((2, -2)) 
+
+    return (c2_map, paths)

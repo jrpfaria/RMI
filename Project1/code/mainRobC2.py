@@ -38,12 +38,11 @@ class MyRob(CRobLinkAngs):
         graph = Graph()     
         
         prev_target = aux = Node(0, 0)
-        target = Node(2, 0)
+        graph.add_node(aux)
+        graph.set_node_visited(aux)
         
-        graph.add_node(prev_target)
-        graph.add_node(target)
-        graph.add_edge(prev_target, target)
-        
+        target = None
+
         offsets = (self.measures.x, self.measures.y)
 
         map_start_x = 24
@@ -52,26 +51,62 @@ class MyRob(CRobLinkAngs):
         map_start = (map_start_x, map_start_y)
         
         c2_map[map_start_y][map_start_x] = "I"
-        c2_map[map_start_y][map_start_x + 1] = "-"
 
         lineHistory = []   
+        
+        paths = []
 
+        target = Node(2, 0)
+        graph.add_node(target)
+        graph.add_edge(aux, target)
+
+        c2_map[map_start_y][map_start_x + 1] = "-"
+
+        """
+        while True:
+            self.readSensors()
+            line = self.measures.lineSensor
+            compass = self.measures.compass
+            
+            # will the compass be exactly 0, 45, 90?
+            c2_map, paths = addToMapStart(line, compass, c2_map, map_start, paths)
+            if  -40 < compass < -10: break
+
+            self.driveMotors(-0.05, 0.05)
+        
+        if not paths:
+            for x, y in paths:
+                node = Node(x, y)
+                graph.add_node(node)
+                graph.add_edge(aux, node)
+
+            lx, ly = paths[0]
+            target = Node(lx, ly)
+        else:
+            quit()
+        """
+            
         while True:
             self.readSensors()
 
             line = self.measures.lineSensor
-            #print_sensor_readings(line)
-
-            # Register last 5 readingsfrom line sensor
+            
             lineHistory.append(line)
+
             if len(lineHistory) > 9:
                 lineHistory.pop(0)
             
-            # Position data accounting for offsets
             current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1]) 
 
             prev_target = aux
-            # print(current, target)
+
+            # if euclidean_distance(current, target) < 1.6:
+            #     if '1' not in line[2:5]:
+            #         c2_map = fixMap(c2_map, map_start, prev_target, target)
+            #         graph.remove_node(target)
+            #         graph.remove_edge(prev_target, target)
+            #         target = prev_target
+            #         print_map(c2_map)
 
             in_vicinity = euclidean_distance(current, target) < 0.2
             speed = 0.01 if in_vicinity else 0.1
@@ -79,28 +114,37 @@ class MyRob(CRobLinkAngs):
 
             while (in_vicinity):
                 paths = evaluateLineHistory(lineHistory)
-                print("Paths: ", paths) 
+                
                 aux = target
                 c2_map = addToMap(paths, c2_map, map_start, prev_target, target)
                 
                 unknowns = pickPath(paths, prev_target, target)
                 cost = 3
-                graph.update_node_state(aux, "visited")
+                
+                graph.set_node_visited(target)
+                
                 target = prev_target
-                for unknown in unknowns:
-                    x, y, score = unknown
+                
+                for x, y, score in unknowns:
                     new_node = Node(x, y)
                     graph.add_node(new_node)
                     graph.add_edge(aux, new_node)
+                    
+                    print(graph.open_nodes)
+                    
                     # decide which edge to take
-                    if (score <= cost and new_node not in graph.get_nodes_with_state("visited")):
+                    if (score <= cost and new_node not in graph.closed_nodes):
                         cost = score
                         target = new_node
                         
                 if target == prev_target:
-                    path = graph.a_star_with_state(aux, "unknown")
+                    path = graph.a_star_unknown(aux)
+                    # a star gives you the shortest path to the node
+                    
                     if path is None:
+                        write_map_to_file(c2_map, "agent_map.out")
                         self.finish()
+                        quit()
                     target = path.pop(0)
                     while path:
                         self.readSensors()
@@ -116,11 +160,8 @@ class MyRob(CRobLinkAngs):
                 
                 print_map(c2_map)
                 break
-            
-            #print("Speed: ", speed, "Error: ", error)   
+             
             self.driveMotors(speed - error, speed + error)
-
-            # self.finish()
 
 class Map():
     def __init__(self, filename):

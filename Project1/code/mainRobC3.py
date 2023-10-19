@@ -36,14 +36,19 @@ class MyRob(CRobLinkAngs):
         c2_map = [[" " for _ in range(MAP_COLS)] for _ in range(MAP_ROWS)]
 
         graph = Graph()     
-        
+        graph.set_node_beacon_count(self.nBeacons)
+
         prev_target = aux = Node(0, 0)
         graph.add_node(aux)
         graph.set_node_visited(aux)
         
+        if (self.measures.ground != -1):
+            graph.set_node_beacon(aux, self.measures.ground)
+        
         target = Node(2, 0)
         graph.add_node(target)
-
+        graph.add_edge(aux, target)
+        
         offsets = (self.measures.x, self.measures.y)
 
         map_start_x = 24
@@ -57,7 +62,7 @@ class MyRob(CRobLinkAngs):
         lineHistory = []   
         
         paths = []
-
+        
         # while True:
         #     self.readSensors()
         #     line = self.measures.lineSensor
@@ -82,9 +87,8 @@ class MyRob(CRobLinkAngs):
         while True:
             self.readSensors()
 
-            print("Beacon ? ", self.measures.beacon)
-            print("Beacon amount: ", self.nBeacons)
-            print("Beacon ready: ", self.measures.beaconReady)
+            # print("Beacon ? ", self.measures.ground)
+            # print("Beacon amount: ", self.nBeacons)
 
             line = self.measures.lineSensor
             
@@ -112,14 +116,15 @@ class MyRob(CRobLinkAngs):
                 
                 graph.set_node_visited(target)
                 
+                if (self.measures.ground != -1):
+                    graph.set_node_beacon(target, self.measures.ground)
+
                 target = prev_target
                 
                 for x, y, score in unknowns:
                     new_node = Node(x, y)
                     graph.add_node(new_node)
                     graph.add_edge(aux, new_node)
-                    
-                    print(graph.open_nodes)
                     
                     # decide which edge to take
                     if (score <= cost and new_node not in graph.closed_nodes):
@@ -131,7 +136,8 @@ class MyRob(CRobLinkAngs):
                     # a star gives you the shortest path to the node
                     
                     if path is None:
-                        write_map_to_file(c2_map, "agent_map.out")
+                        path = graph.astar_beacon()
+                        write_beacon_path_to_file(path)
                         self.finish()
                         quit()
                     target = path.pop(0)
