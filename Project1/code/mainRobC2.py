@@ -56,13 +56,8 @@ class MyRob(CRobLinkAngs):
         
         paths = []
 
-        target = Node(2, 0)
-        graph.add_node(target)
-        graph.add_edge(aux, target)
-
         c2_map[map_start_y][map_start_x + 1] = "-"
 
-        """
         while True:
             self.readSensors()
             line = self.measures.lineSensor
@@ -72,9 +67,12 @@ class MyRob(CRobLinkAngs):
             c2_map, paths = addToMapStart(line, compass, c2_map, map_start, paths)
             if  -40 < compass < -10: break
 
-            self.driveMotors(-0.05, 0.05)
-        
-        if not paths:
+            if abs(compass) % 45 < 15:
+                self.driveMotors(-0.5, 0.5)
+            else:
+                self.driveMotors(-0.15, 0.15)
+    
+        if paths:
             for x, y in paths:
                 node = Node(x, y)
                 graph.add_node(node)
@@ -83,33 +81,24 @@ class MyRob(CRobLinkAngs):
             lx, ly = paths[0]
             target = Node(lx, ly)
         else:
-            quit()
-        """
+            print("no maidens?")
             
         while True:
             self.readSensors()
 
             line = self.measures.lineSensor
             
-            lineHistory.append(line)
+            current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1]) 
+
+            lineHistory.append((line, current, self.measures.compass))
 
             if len(lineHistory) > 9:
                 lineHistory.pop(0)
-            
-            current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1]) 
 
             prev_target = aux
 
-            # if euclidean_distance(current, target) < 1.6:
-            #     if '1' not in line[2:5]:
-            #         c2_map = fixMap(c2_map, map_start, prev_target, target)
-            #         graph.remove_node(target)
-            #         graph.remove_edge(prev_target, target)
-            #         target = prev_target
-            #         print_map(c2_map)
-
             in_vicinity = euclidean_distance(current, target) < 0.2
-            speed = 0.01 if in_vicinity else 0.1
+            speed = 0.01 if in_vicinity else 0.09
             error = calculateError(current, target, self.measures.compass)
 
             while (in_vicinity):
@@ -154,7 +143,7 @@ class MyRob(CRobLinkAngs):
                             aux = target
                             target = path.pop(0)
                         error = calculateError(current, target, self.measures.compass)
-                        speed = 0.01 if in_vicinity else 0.1
+                        speed = 0.01 if in_vicinity else 0.09
                         self.driveMotors(speed - error, speed + error)
 
                 

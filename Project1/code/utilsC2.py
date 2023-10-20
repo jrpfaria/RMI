@@ -58,7 +58,9 @@ def getRotation(line_history):
     return False
 
 def evaluateLineHistory(lineHistory):
+    lineHistory = [x[0] for x in lineHistory]
     paths = []
+    print(lineHistory)
     paths.extend(checkCenter(lineHistory[-1]))
     paths.extend(checkSides(lineHistory, paths))
     return list(set(paths))
@@ -385,29 +387,29 @@ def addToMap(paths, c2_map, map_start, prev_target, target):
 def addToMapStart(line, compass, c2_map, map_start, paths):
     mx, my = map_start
 
-    if line[3] == '1':
-        if compass == 0:
+    if '1' in line[2:5]:
+        if -10 < compass < 10:
             c2_map[my][mx + 1] = "-"
             paths.append((2, 0))
-        elif compass == 45:                    
+        elif 35 < compass < 55:                    
             c2_map[my - 1][mx + 1] = "/"
             paths.append((2, 2))
-        elif compass == 90:
+        elif 80 < compass < 90:
             c2_map[my - 1][mx] = "|"
             paths.append((0, 2))
-        elif compass == 135: 
+        elif 125 < compass < 145: 
             c2_map[my - 1][mx - 1] = "\\"
             paths.append((-2, -2))
-        elif compass == 180 or compass == -180:
+        elif 170 < compass < 180 or -180 < compass < -170:
             c2_map[my][mx - 1] = "-"
             paths.append((-2, 0))
-        elif compass == -135:
+        elif -145 < compass < -125:
             c2_map[my + 1][mx - 1] = "/"
             paths.append((-2, -2))
-        elif compass == -90:
+        elif -90 < compass < -80:
             c2_map[my + 1][mx] = "|"
             paths.append((0, 2))
-        elif compass == -45:
+        elif -55 < compass < -35:
             c2_map[my + 1][mx + 1] = "\\" 
             paths.append((2, -2)) 
 

@@ -31,6 +31,14 @@ class Graph:
         self.edges = {}
         self.closed_nodes = set()
         self.open_nodes = set()
+        self.beacon_count = 0
+        self.beacon_nodes = set()
+
+    def set_node_beacon_count(self, count):
+        self.beacon_count = count
+
+    def set_node_beacon(self, node, number):
+        self.beacon_nodes.add((number, node))
         
     def set_node_visited(self, node):
         self.closed_nodes.add(node)
@@ -50,10 +58,7 @@ class Graph:
         self.edges[(node2, node1)] = distance
             
     def a_star(self, start, goal):
-        for node in self.nodes:
-            node.g_score = float('inf')
-            node.h_score = 0
-            node.parent = None
+        self.reset_nodes()
             
         open_set = []
         closed_set = set()
@@ -86,10 +91,7 @@ class Graph:
         return None
     
     def a_star_unknown(self, start):
-        for node in self.nodes:
-            node.g_score = float('inf')
-            node.h_score = 0
-            node.parent = None
+        self.reset_nodes()
             
         open_set = []
         closed_set = set()
@@ -109,6 +111,10 @@ class Graph:
             for neighbor in self.get_neighbors(current_node):
                 if neighbor in closed_set:
                     continue
+                
+                for node in self.nodes:
+                    if node == neighbor:
+                        neighbor = node
 
                 tentative_g_score = current_node.g_score + self.get_distance(current_node, neighbor)
 
@@ -120,6 +126,30 @@ class Graph:
                     heapq.heappush(open_set, (f_score, neighbor))
         
         return None
+    
+    def astar_beacon(self):
+        beacons = sorted(list(self.beacon_nodes), key=lambda x: x[0])
+        
+        path = []
+        for i in range(len(beacons)):
+            start = beacons[i][1]
+            goal = beacons[0][1] if i == len(beacons) - 1 else beacons[i + 1][1]
+                
+            result = self.a_star(start, goal)
+            path.extend(result[:-1])
+        path.append(beacons[0][1])
+                
+        return path     
+    
+    def reset_nodes(self):
+        for node in self.nodes:
+            node.g_score = float('inf')
+            node.h_score = 0
+            node.parent = None
+            for node in self.get_neighbors(node):
+                node.g_score = float('inf')
+                node.h_score = 0
+                node.parent = None  
     
     def calculate_heuristic(self, node, goal, method='euclidean'):
         if method == 'euclidean':

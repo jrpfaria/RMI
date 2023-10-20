@@ -1,5 +1,4 @@
 import heapq  # For priority queue
-import pickle
 
 class Node:
     def __init__(self, x, y):
