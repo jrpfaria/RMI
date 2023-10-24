@@ -45,6 +45,7 @@ class MyRob(CRobLinkAngs):
 
         offsets = (self.measures.x, self.measures.y)
 
+        off_line_counter = 0
         map_start_x = 24
         map_start_y = 10
 
@@ -55,8 +56,6 @@ class MyRob(CRobLinkAngs):
         lineHistory = []   
         
         paths = []
-
-        c2_map[map_start_y][map_start_x + 1] = "-"
 
         while True:
             self.readSensors()
@@ -87,10 +86,11 @@ class MyRob(CRobLinkAngs):
             self.readSensors()
 
             line = self.measures.lineSensor
-            
+
             current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1]) 
 
-            lineHistory.append((line, current, self.measures.compass))
+            sensor_positions = calculate_sensor_positions(current, self.measures.compass)
+            lineHistory.append((line, sensor_positions))
 
             if len(lineHistory) > 9:
                 lineHistory.pop(0)
@@ -98,11 +98,11 @@ class MyRob(CRobLinkAngs):
             prev_target = aux
 
             in_vicinity = euclidean_distance(current, target) < 0.2
-            speed = 0.01 if in_vicinity else 0.09
+            speed = 0.1
             error = calculateError(current, target, self.measures.compass)
 
             while (in_vicinity):
-                paths = evaluateLineHistory(lineHistory)
+                paths = evaluateLineHistory(lineHistory, target)
                 
                 aux = target
                 c2_map = addToMap(paths, c2_map, map_start, prev_target, target)
@@ -143,10 +143,9 @@ class MyRob(CRobLinkAngs):
                             aux = target
                             target = path.pop(0)
                         error = calculateError(current, target, self.measures.compass)
-                        speed = 0.01 if in_vicinity else 0.09
+                        speed = 0.1
                         self.driveMotors(speed - error, speed + error)
 
-                
                 print_map(c2_map)
                 break
              

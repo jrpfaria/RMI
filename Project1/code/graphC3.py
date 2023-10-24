@@ -92,7 +92,7 @@ class Graph:
     
     def a_star_unknown(self, start):
         self.reset_nodes()
-            
+
         open_set = []
         closed_set = set()
 
@@ -100,22 +100,17 @@ class Graph:
         start.h_score = self.calculate_heuristic(start, start)
         heapq.heappush(open_set, (start.g_score + start.h_score, start))
 
+        closest_unknown = None  # Initialize the variable to store the closest unknown node
+
         while open_set:
             _, current_node = heapq.heappop(open_set)
-
-            if current_node in self.open_nodes:
-                return self.reconstruct_path(start, current_node)
 
             closed_set.add(current_node)
 
             for neighbor in self.get_neighbors(current_node):
                 if neighbor in closed_set:
                     continue
-                
-                for node in self.nodes:
-                    if node == neighbor:
-                        neighbor = node
-
+            
                 tentative_g_score = current_node.g_score + self.get_distance(current_node, neighbor)
 
                 if tentative_g_score < neighbor.g_score:
@@ -124,7 +119,13 @@ class Graph:
                     neighbor.h_score = self.calculate_heuristic(neighbor, start)
                     f_score = neighbor.g_score + neighbor.h_score
                     heapq.heappush(open_set, (f_score, neighbor))
-        
+
+                    if neighbor in self.open_nodes and (closest_unknown is None or f_score < closest_unknown[0]):
+                        closest_unknown = (f_score, neighbor)
+
+        if closest_unknown:
+            return self.reconstruct_path(start, closest_unknown[1])
+
         return None
     
     def astar_beacon(self):

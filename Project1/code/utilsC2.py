@@ -1,4 +1,4 @@
-from math import sqrt, atan2, radians, pi
+from math import sqrt, atan2, radians, pi, cos, sin
 
 def shift_rotate_list(lst, shift):
     shift %= len(lst)
@@ -22,20 +22,12 @@ def euclidean_distance(current, target):
     x2, y2 = target.coordinates
 
     return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2))
-    
-def calculateSpeed(actual, target, heading):
-    x, y = actual
-    target_x, target_y = target
-    
-    if heading == 0 or heading == 4 or heading == -4:
-        return 0.1 if abs(target_x - x) > 0.5 else 0.05
-    
-    if heading == 2 or heading == -2:
-        return 0.1 if abs(target_y - y) > 0.5 else 0.05
-    
-    aux = abs(target_x - x)
-    aux2 = abs(target_y - y)
-    return 0.1 if sqrt(pow(aux, 2) + pow(aux2, 2)) > 0.5 else 0.05
+
+def manhattan_distance(current, target):
+    x1, y1 = current
+    x2, y2 = target.coordinates
+
+    return abs(x2 - x1) + abs(y2 - y1)
 
 def calculateError(actual, target, compass):
     x, y = actual.coordinates
@@ -49,60 +41,79 @@ def calculateError(actual, target, compass):
     while angle_difference > pi:
         angle_difference -= 2 * pi
         
-    return 0.5 * angle_difference
+    return 0.8 * angle_difference
 
-def getRotation(line_history):
-    for line in line_history[-3:]:
-        if '1' in line[5:]:
-            return True
-    return False
-
-def evaluateLineHistory(lineHistory):
-    lineHistory = [x[0] for x in lineHistory]
+def evaluateLineHistory(lineHistory, target):
     paths = []
-    print(lineHistory)
-    paths.extend(checkCenter(lineHistory[-1]))
-    paths.extend(checkSides(lineHistory, paths))
+    paths.extend(checkCenter(lineHistory[-1], target))
+    paths.extend(checkSides(lineHistory[0:-1], target, paths))
     return list(set(paths))
 
-def checkSides(lineHistory, paths):
+def checkSides(lineHistory, target, paths):
     hl = hr = 0
 
-    # Check for paths on the sides
     for i in range(len(lineHistory)-1):
-        # Check for paths on the left side
-        if '1' in lineHistory[i][0:2]:
-            # Check for hard lefts or left hooks
-            if '1' in lineHistory[i][0]:
-                if '1' in lineHistory[i][1]:
+        line, positions = lineHistory[i]
+        next_line, next_positions = lineHistory[i+1]
+        print(line)
+
+        # Consider sensor position
+        s0_dist = manhattan_distance(positions[0], target) - 0.24
+        s1_dist = manhattan_distance(positions[1], target) - 0.16 
+        s5_dist = manhattan_distance(positions[5], target) - 0.16
+        s6_dist = manhattan_distance(positions[6], target) - 0.24
+
+        if '1' in line[0:2]:
+            if '0' not in line[0:2]:
+                if s0_dist <= 0.1 and s1_dist <= 0.1:
                     hl += 1
-                elif '0' in lineHistory[i][1]:
+            if line[1] == '0' and line[0:2] != next_line[0:2] and '1' in next_line[0:2]:
+                if s0_dist > 0.1 and s1_dist > 0.1:
                     paths.append('lh')
-
-        # Check for paths on the right side
-        if '1' in lineHistory[i][5:]:
-            # Check for hard rights or right hooks
-            if '1' in lineHistory[i][6]:
-                if '1' in lineHistory[i][5]:
+        
+        if '1' in line[5:]:
+            if '0' not in line[5:]:
+                if s6_dist <= 0.1 and s5_dist <= 0.1:
                     hr += 1
-                elif '0' in lineHistory[i][5]:
+            if line[5] == '0' and line[5:] != next_line[5:] and '1' in next_line[5:]:
+                if s6_dist > 0.1 and s5_dist > 0.1:
                     paths.append('rh')
-    
-    # Make sure that we really got a hard turn
-    if hl > 2:
-        paths.append('hl')
-    elif 1 <= hl <= 2 and 'sl' not in paths and 'lh' not in paths: paths.append('hl')
-    
-    if hr > 2:
-        paths.append('hr')
-    elif 1 <= hr <= 2 and 'sr' not in paths and 'rh' not in paths: paths.append('hr')
-    
-    return paths
 
-def checkCenter(line):
+    line = lineHistory[len(lineHistory)-1][0]
+    if line[3] == '0':
+        if line[0] == '1':
+            paths.append('sl')
+        if line[6] == '1':
+            paths.append('sr')
+    
+    if hl > 1:
+        paths.append('hl')
+    elif hl == 1 and 'lh' not in paths and 'sl' not in paths:
+        paths.append('hl')
+
+    if hr > 1:
+        paths.append('hr')
+    elif hr == 1 and 'rh' not in paths and 'sr' not in paths:
+        paths.append('hr')
+
+    if paths == []:
+        if '0' not in line[2:-1]:
+            paths.append('hr')
+        if '0' not in line[0:5]:
+            paths.append('hl')
+
+    return paths
+    
+def checkCenter(lineHistory, target):
     paths = []
-    if '1' in line[3]:
+
+    line, position = lineHistory
+    
+    print('center', line)
+
+    if line[3] == '1':
         paths.append('fwd')
+
     if '1' in line[0]:
         paths.append('sl')
     if '1' in line[6]:
@@ -394,7 +405,7 @@ def addToMapStart(line, compass, c2_map, map_start, paths):
         elif 35 < compass < 55:                    
             c2_map[my - 1][mx + 1] = "/"
             paths.append((2, 2))
-        elif 80 < compass < 90:
+        elif 80 < compass < 100:
             c2_map[my - 1][mx] = "|"
             paths.append((0, 2))
         elif 125 < compass < 145: 
@@ -406,11 +417,34 @@ def addToMapStart(line, compass, c2_map, map_start, paths):
         elif -145 < compass < -125:
             c2_map[my + 1][mx - 1] = "/"
             paths.append((-2, -2))
-        elif -90 < compass < -80:
+        elif -100 < compass < -80:
             c2_map[my + 1][mx] = "|"
-            paths.append((0, 2))
+            paths.append((0, -2))
         elif -55 < compass < -35:
             c2_map[my + 1][mx + 1] = "\\" 
             paths.append((2, -2)) 
 
     return (c2_map, paths)
+
+def calculate_sensor_positions(current_node, compass, sensor_distance=0.438, sensor_spacing=0.08):
+    x, y = current_node.coordinates
+    middle_sensor_x = x + sensor_distance * cos(radians(compass))
+    middle_sensor_y = y + sensor_distance * sin(radians(compass))
+
+    right_sensor_positions = []
+    for i in range(1, 4):
+        angle = compass - 90
+        right_sensor_x = middle_sensor_x + i * sensor_spacing * cos(radians(angle))
+        right_sensor_y = middle_sensor_y + i * sensor_spacing * sin(radians(angle))
+        right_sensor_positions.append((right_sensor_x, right_sensor_y))
+
+    left_sensor_positions = []
+    for i in range(1, 4):
+        angle = compass + 90
+        left_sensor_x = middle_sensor_x + i * sensor_spacing * cos(radians(angle))
+        left_sensor_y = middle_sensor_y + i * sensor_spacing * sin(radians(angle))
+        left_sensor_positions.append((left_sensor_x, left_sensor_y))
+
+    all_sensor_positions = left_sensor_positions + [(middle_sensor_x, middle_sensor_y)] + right_sensor_positions
+
+    return all_sensor_positions

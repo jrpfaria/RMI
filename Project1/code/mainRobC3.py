@@ -51,62 +51,63 @@ class MyRob(CRobLinkAngs):
         
         offsets = (self.measures.x, self.measures.y)
 
+        speed = 0.1
         map_start_x = 24
         map_start_y = 10
 
         map_start = (map_start_x, map_start_y)
         
         c2_map[map_start_y][map_start_x] = "I"
-        c2_map[map_start_y][map_start_x + 1] = "-"
 
         lineHistory = []   
         
         paths = []
         
-        # while True:
-        #     self.readSensors()
-        #     line = self.measures.lineSensor
-        #     compass = self.measures.compass
+        while True:
+            self.readSensors()
+            line = self.measures.lineSensor
+            compass = self.measures.compass
             
-        #     # will the compass be exactly 0, 45, 90?
-        #     c2_map, paths = addToMapStart(line, compass, c2_map, map_start, paths)
-        #     if  -40 < compass < -10: break
+            # will the compass be exactly 0, 45, 90?
+            c2_map, paths = addToMapStart(line, compass, c2_map, map_start, paths)
+            if  -40 < compass < -10: break
 
-        #     self.driveMotors(-0.05, 0.05)
-        # if not paths:
-        #     for x, y in paths:
-        #         node = Node(x, y)
-        #         graph.add_node(node)
-        #         graph.add_edge(aux, node)
+            if abs(compass) % 45 < 15:
+                self.driveMotors(-0.5, 0.5)
+            else:
+                self.driveMotors(-0.15, 0.15)
+    
+        if paths:
+            for x, y in paths:
+                node = Node(x, y)
+                graph.add_node(node)
+                graph.add_edge(aux, node)
 
-        #     lx, ly = paths[0]
-        #     target = Node(lx, ly)
-        # else:
-        #     quit()
+            lx, ly = paths[0]
+            target = Node(lx, ly)
+        else:
+            print("no maidens?")
             
         while True:
             self.readSensors()
 
-            # print("Beacon ? ", self.measures.ground)
-            # print("Beacon amount: ", self.nBeacons)
-
             line = self.measures.lineSensor
-            
-            lineHistory.append(line)
+
+            current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1]) 
+
+            sensor_positions = calculate_sensor_positions(current, self.measures.compass)
+            lineHistory.append((line, sensor_positions))
 
             if len(lineHistory) > 9:
                 lineHistory.pop(0)
-            
-            current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1]) 
 
             prev_target = aux
 
             in_vicinity = euclidean_distance(current, target) < 0.2
-            speed = 0.01 if in_vicinity else 0.1
             error = calculateError(current, target, self.measures.compass)
 
             while (in_vicinity):
-                paths = evaluateLineHistory(lineHistory)
+                paths = evaluateLineHistory(lineHistory, target)
                 
                 aux = target
                 c2_map = addToMap(paths, c2_map, map_start, prev_target, target)
@@ -136,10 +137,24 @@ class MyRob(CRobLinkAngs):
                     # a star gives you the shortest path to the node
                     
                     if path is None:
+                        
+                        path = graph.a_star(aux, Node(0, 0))
+                        
+                        while path:
+                            self.readSensors()
+                            current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1])
+                            in_vicinity = euclidean_distance(current, target) < 0.2
+                            if in_vicinity:
+                                aux = target
+                                target = path.pop(0)
+                            error = calculateError(current, target, self.measures.compass)
+                            self.driveMotors(speed - error, speed + error)
+                            
                         path = graph.astar_beacon()
                         write_beacon_path_to_file(path)
                         self.finish()
                         quit()
+                        
                     target = path.pop(0)
                     while path:
                         self.readSensors()
@@ -149,7 +164,6 @@ class MyRob(CRobLinkAngs):
                             aux = target
                             target = path.pop(0)
                         error = calculateError(current, target, self.measures.compass)
-                        speed = 0.01 if in_vicinity else 0.1
                         self.driveMotors(speed - error, speed + error)
 
                 
