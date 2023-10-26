@@ -80,10 +80,13 @@ def checkSides(lineHistory, target, paths):
                     paths.append('rh')
 
     line = lineHistory[len(lineHistory)-1][0]
+    positions = lineHistory[len(lineHistory)-1][1]
+    s0_dist = manhattan_distance(positions[0], target) - 0.24
+    s6_dist = manhattan_distance(positions[6], target) - 0.24
     if line[3] == '0':
-        if line[0] == '1':
+        if line[0] == '1' and s0_dist > 0.1:
             paths.append('sl')
-        if line[6] == '1':
+        if line[6] == '1' and s6_dist > 0.1:
             paths.append('sr')
     
     if hl > 1:

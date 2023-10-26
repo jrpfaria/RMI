@@ -91,10 +91,12 @@ def checkSides(lineHistory, target, paths):
                     paths.append('rh')
 
     line = lineHistory[len(lineHistory)-1][0]
+    s0_dist = manhattan_distance(lineHistory[1][0], target) - 0.24
+    s6_dist = manhattan_distance(lineHistory[1][0], target) - 0.24
     if line[3] == '0':
-        if line[0] == '1':
+        if line[0] == '1' and s0_dist > 0.1:
             paths.append('sl')
-        if line[6] == '1':
+        if line[6] == '1' and s6_dist > 0.1:
             paths.append('sr')
     
 
@@ -107,6 +109,12 @@ def checkSides(lineHistory, target, paths):
         paths.append('hr')
     elif hr == 1 and 'rh' not in paths and 'sr' not in paths:
         paths.append('hr')
+
+    if paths == []:
+        if '0' not in line[2:-1]:
+            paths.append('hr')
+        if '0' not in line[0:5]:
+            paths.append('hl')
 
     return paths
     
