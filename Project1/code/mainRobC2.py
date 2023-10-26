@@ -62,9 +62,8 @@ class MyRob(CRobLinkAngs):
             line = self.measures.lineSensor
             compass = self.measures.compass
             
-            # will the compass be exactly 0, 45, 90?
             c2_map, paths = addToMapStart(line, compass, c2_map, map_start, paths)
-            if  -40 < compass < -10: break
+            if  -30 < compass < 0: break
 
             if abs(compass) % 45 < 15:
                 self.driveMotors(-0.5, 0.5)
@@ -138,13 +137,12 @@ class MyRob(CRobLinkAngs):
                     while path:
                         self.readSensors()
                         current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1]) 
-                        in_speed_zone = euclidean_distance(current, target) > 1
                         in_vicinity = euclidean_distance(current, target) < 0.2
                         if in_vicinity:
                             aux = target
                             target = path.pop(0)
                         error = calculateError(current, target, self.measures.compass)
-                        speed = 0.15 if in_speed_zone else 0.1
+                        speed = 0.15
                         self.driveMotors(speed - error, speed + error)
 
                 print_map(c2_map)

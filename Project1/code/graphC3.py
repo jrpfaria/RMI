@@ -71,7 +71,7 @@ class Graph:
             _, current_node = heapq.heappop(open_set)
 
             if current_node == goal:
-                return self.reconstruct_path(start, goal)
+                return self.reconstruct_path(start, current_node)
 
             closed_set.add(current_node)
 
@@ -110,7 +110,7 @@ class Graph:
             for neighbor in self.get_neighbors(current_node):
                 if neighbor in closed_set:
                     continue
-            
+
                 tentative_g_score = current_node.g_score + self.get_distance(current_node, neighbor)
 
                 if tentative_g_score < neighbor.g_score:

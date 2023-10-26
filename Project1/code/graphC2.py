@@ -71,7 +71,7 @@ class Graph:
             _, current_node = heapq.heappop(open_set)
 
             if current_node == goal:
-                return self.reconstruct_path(start, goal)
+                return self.reconstruct_path(start, current_node)
 
             closed_set.add(current_node)
 

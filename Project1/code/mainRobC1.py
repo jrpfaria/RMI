@@ -1,10 +1,10 @@
-
+import math
 import sys
 from croblink import *
 from math import *
 import xml.etree.ElementTree as ET
 
-from utilsC1 import center_of_mass, get_base
+from utilsC1 import *
 
 CELLROWS=7
 CELLCOLS=14
@@ -27,9 +27,8 @@ class MyRob(CRobLinkAngs):
             print("Connection refused or error")
             quit()
 
-
         # Constants for PID controller
-        Kp = 2.9000  # Proportional constant
+        Kp = 3.0000  # Proportional constant
         Ki = 0.0000  # Integral constant
         Kd = 0.0000  # Derivative constant
 
@@ -42,8 +41,11 @@ class MyRob(CRobLinkAngs):
         base = get_base(n_sensor, step)
         base_speed = 0.15
 
-        history = [0, 0, 0]
-        max_history_size = 3
+        error_history = [0, 0, 0]
+        max_history_size = 10
+
+        error_history = [0, 0, 0]
+        max_history_size = 10
 
         while True:
 
@@ -53,29 +55,62 @@ class MyRob(CRobLinkAngs):
             # print(self.measures.lineSensor)
 
             line = self.measures.lineSensor
+            # print_sensor_readings(line)
 
-            backup = 0
+            # check if 1s star appearing from left to right
+            # if so then we are going back
+
             if '1' not in line:
-                while (True):
+                angle = 0
+                self.driveMotors(-0.03, -0.03)
+                if any(error > 0.08 for error in error_history[-3:]):
+                    self.readSensors()
+                    self.driveMotors(-0.1, +0.1)
+                if any(error < -0.08 for error in error_history[-3:]):
+                    self.readSensors()
+                    self.driveMotors(+0.1, -0.1)
+                history = []  
+                early = False            
+                while angle > -3 * math.pi / 4 + 0.24:
                     self.readSensors()
                     line = self.measures.lineSensor
-                    self.driveMotors(-0.1, -0.1)
-                    if '1' in line:
-                        backup += 1
-                    if backup == 3:
-                        break
+                    line = remove_outliers(line)
+                    if '11' in ''.join(line):
+                        error = center_of_mass(line, step, 0)
+                        if len(history) > 0:
+                            error = center_of_mass(line, step, 0)
+                            if error > 0.24:
+                                early = True
+                                break
+                        history.append(error)
+                    self.driveMotors(-0.08, +0.08)
+                    angle -= 0.16
+                if early:
+                    continue
+                result, message = check_for_window_pattern(history)
+                if message == 'Needs adjustment':
+                    self.readSensors()
+                    self.driveMotors(+0.15, -0.15)
+                if result:
+                    continue
+                for _ in range(6):
+                    self.readSensors()
+                    self.driveMotors(+0.15, -0.15)
+                    line = self.measures.lineSensor
+                while line[-4:].count('1') < 2:
+                    self.readSensors()
+                    line = self.measures.lineSensor
+                    self.driveMotors(+0.15, -0.15)
+                    angle += 0.3
+                continue
 
             # Calculate the error
             error = center_of_mass(line, step, base) - base
 
-            history.append(error)
+            error_history.append(error)
 
-            if len(history) > max_history_size:
-                history.pop(0)
-
-            history = sorted(history)
-
-            error = history[1]
+            if len(error_history) > max_history_size:
+                error_history.pop(0)
 
             # Calculate the integral term
             integral += error

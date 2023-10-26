@@ -57,16 +57,15 @@ def median_value(pattern, step = 1, base = 3, x = '1'):
         return (middle1 + middle2) / 2.0 * step
 
 def center_of_mass(pattern, step = 1, base = 3, x = '1'):
-    total_ones = pattern[1:6].count(x)
+    total_ones = pattern.count(x)
     if total_ones == 0:
         return base
 
-    center_of_mass = sum(i * step for i, bit in enumerate(pattern[1:6]) if bit == x) / total_ones
+    center_of_mass = sum(i * step for i, bit in enumerate(pattern) if bit == x) / total_ones
 
     return center_of_mass
 
 def get_base(pattern_length, step = 1):
-    pattern_length -= 2
     middle_index = pattern_length // 2
 
     if pattern_length % 2 != 0: 
@@ -109,3 +108,62 @@ def generate_patterns(length, max_consecutive_ones):
         patterns += [pattern.copy() + [0] * (length - len(pattern))]  
                 
     return patterns
+
+def calculate_slope(x, y):
+    n = len(x)
+    if n < 2:
+        return None
+    x_mean = sum(x) / n
+    y_mean = sum(y) / n 
+    numerator = sum((x[i] - x_mean) * (y[i] - y_mean) for i in range(n))
+    denominator = sum((x[i] - x_mean) ** 2 for i in range(n))   
+    slope = numerator / denominator
+    return slope
+
+def is_likely_ascending(data, threshold=0.9):
+    if len(data) < 2:
+        return False
+    x = list(range(len(data)))
+    slope = calculate_slope(x, data)
+
+    if slope is not None and slope >= threshold:
+        return True
+    else:
+        return False
+
+def remove_outliers(binary_list):
+    result = []
+    for i in range(len(binary_list)):
+        if binary_list[i] == '1':
+            left_neighbor = binary_list[i - 1] if i > 0 else '0'
+            right_neighbor = binary_list[i + 1] if i < len(binary_list) - 1 else '0'
+            if left_neighbor == '1' or right_neighbor == '1':
+                result.append('1')
+            else:
+                result.append('0')
+        else:
+            if (i > 0 and binary_list[i - 1] == '1') and (i < len(binary_list) - 1 and binary_list[i + 1] == '1'):
+                result.append('1')
+                result[-2] = '1'
+            else:
+                result.append('0')
+    return result
+
+def check_for_window_pattern(history):
+
+    print(history)
+
+    if len(history) < 2:
+        if len(history) == 1:
+            if history[0] == 0.08:
+                return True, 'Possible Miss'
+        return False, 'Hit the tip'
+    
+    if any(line > 0.32 for line in history):
+        return True, 'Needs adjustment'
+        
+    avg = sum(history) / len(history)
+
+    history = [line for line in history if abs(avg - line) < 0.16]
+    
+    return is_likely_ascending(history, -0.035), 'Analyzing slope'

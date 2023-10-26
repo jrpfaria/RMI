@@ -1,4 +1,4 @@
-from math import sqrt, atan2, radians, pi, sin, cos
+from math import sqrt, atan2, radians, pi, cos, sin
 
 def shift_rotate_list(lst, shift):
     shift %= len(lst)
@@ -39,7 +39,6 @@ def manhattan_distance(current, target):
 
     return abs(x2 - x1) + abs(y2 - y1)
 
-
 def calculateError(actual, target, compass):
     x, y = actual.coordinates
     target_x, target_y = target.coordinates
@@ -52,7 +51,7 @@ def calculateError(actual, target, compass):
     while angle_difference > pi:
         angle_difference -= 2 * pi
         
-    return 0.420 * angle_difference
+    return 0.8 * angle_difference
 
 def evaluateLineHistory(lineHistory, target):
     paths = []
@@ -100,7 +99,6 @@ def checkSides(lineHistory, target, paths):
         if line[6] == '1' and s6_dist > 0.1:
             paths.append('sr')
     
-
     if hl > 1:
         paths.append('hl')
     elif hl == 1 and 'lh' not in paths and 'sl' not in paths:
