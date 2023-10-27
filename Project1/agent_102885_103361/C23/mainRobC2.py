@@ -4,8 +4,8 @@ from croblink import *
 from math import *
 import xml.etree.ElementTree as ET
 
-from utilsC3 import *
-from graphC3 import *
+from utils import *
+from graph import *
 
 CELLROWS=7
 CELLCOLS=14
@@ -36,20 +36,15 @@ class MyRob(CRobLinkAngs):
         c2_map = [[" " for _ in range(MAP_COLS)] for _ in range(MAP_ROWS)]
 
         graph = Graph()     
-        graph.set_node_beacon_count(self.nBeacons)
-
+        
         prev_target = aux = Node(0, 0)
         graph.add_node(aux)
         graph.set_node_visited(aux)
         
-        if (self.measures.ground != -1):
-            graph.set_node_beacon(aux, self.measures.ground)
-        
         target = None
-        
+
         offsets = (self.measures.x, self.measures.y)
 
-        off_line_counter = 0
         map_start_x = 24
         map_start_y = 10
 
@@ -67,7 +62,7 @@ class MyRob(CRobLinkAngs):
             compass = self.measures.compass
             
             c2_map, paths = addToMapStart(line, compass, c2_map, map_start, paths)
-            if  -30 < compass < 0: break
+            if  -20 < compass < 0: break
 
             if abs(compass) % 45 < 15:
                 self.driveMotors(-0.5, 0.5)
@@ -83,7 +78,7 @@ class MyRob(CRobLinkAngs):
             lx, ly = paths[0]
             target = Node(lx, ly)
         else:
-            print("no maidens?")
+            print("no paths?")
             
         while True:
             self.readSensors()
@@ -95,29 +90,31 @@ class MyRob(CRobLinkAngs):
             sensor_positions = calculate_sensor_positions(current, self.measures.compass)
             lineHistory.append((line, sensor_positions))
 
-            if len(lineHistory) > 9:
+            if len(lineHistory) > 7:
                 lineHistory.pop(0)
-
+                
             prev_target = aux
+            
+            dist_to_target = euclidean_distance(current, target)
 
-            in_speed_zone = euclidean_distance(current, target) > 1
-            in_vicinity = euclidean_distance(current, target) < 0.2
+            in_speed_zone = dist_to_target > 1
+            in_vicinity = dist_to_target < 0.2
             error = calculateError(current, target, self.measures.compass)
 
             while (in_vicinity):
                 paths = evaluateLineHistory(lineHistory, target)
                 
                 aux = target
-                c2_map = addToMap(paths, c2_map, map_start, prev_target, target)
                 
                 unknowns = pickPath(paths, prev_target, target)
+                c2_map = addToMap(paths, c2_map, map_start, prev_target, target)
+                write_map_to_file(c2_map, "map.out")
+                
                 cost = 3
                 
-                graph.set_node_visited(target)
+                if target in graph.open_nodes:
+                    graph.set_node_visited(target)
                 
-                if (self.measures.ground != -1):
-                    graph.set_node_beacon(target, self.measures.ground)
-
                 target = prev_target
                 
                 for x, y, score in unknowns:
@@ -135,39 +132,13 @@ class MyRob(CRobLinkAngs):
                     # a star gives you the shortest path to the node
                     
                     if path is None:
-                        
-                        path = graph.a_star(aux, Node(0, 0))
-
-                        target = path.pop(0)
-                        while path:
-                            self.readSensors()
-                            current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1])
-                            in_vicinity = euclidean_distance(current, target) < 0.2
-                            if in_vicinity:
-                                aux = target
-                                target = path.pop(0)
-                            error = calculateError(current, target, self.measures.compass)
-                            speed = 0.15
-                            self.driveMotors(speed - error, speed + error)
-                            
-
-                        while not euclidean_distance(current, target) < 0.2:
-                            self.readSensors()
-                            current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1])
-                            error = calculateError(current, target, self.measures.compass)
-                            speed = 0.15
-                            self.driveMotors(speed - error, speed + error)
-
-
-                        path = graph.astar_beacon()
-                        write_beacon_path_to_file(path)
+                        write_map_to_file(c2_map, "map.out")
                         self.finish()
                         quit()
-                        
                     target = path.pop(0)
                     while path:
                         self.readSensors()
-                        current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1])
+                        current = Node(self.measures.x - offsets[0], self.measures.y - offsets[1]) 
                         in_vicinity = euclidean_distance(current, target) < 0.2
                         if in_vicinity:
                             aux = target
@@ -176,12 +147,12 @@ class MyRob(CRobLinkAngs):
                         speed = 0.15
                         self.driveMotors(speed - error, speed + error)
 
-                
                 print_map(c2_map)
                 break
             
             speed = 0.15 if in_speed_zone else 0.1
             self.driveMotors(speed - error, speed + error)
+            
 
 class Map():
     def __init__(self, filename):
