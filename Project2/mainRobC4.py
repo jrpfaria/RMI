@@ -54,19 +54,13 @@ class MyRob(CRobLinkAngs):
         coordinates = (0, 0)    # Coordinates
         out = (0, 0)            # Step
         theta = 0               # Angle
-
-        off_x = self.measures.x
-        off_y = self.measures.y
-
+        
         while True:
-
-            # Read sensor values (0s and 1s)
             self.readSensors()
 
+            # Get the line and compass values
             line = self.measures.lineSensor
-            compass = radians(self.measures.compass)
-            x = self.measures.x - off_x
-            y = self.measures.y - off_y
+            compass = radians(self.measures.compass) # Converted to radians to normalize calculations
 
             # Calculate the error
             error = center_of_mass(line, step, base) - base
@@ -89,20 +83,31 @@ class MyRob(CRobLinkAngs):
             left_power = min(max(left_power, -0.15), +0.15)
             right_power = min(max(right_power, -0.15), +0.15)
 
+            # MOVEMENT MODEL
+            # Wheel Power for current cycle
             wpow = (left_power, right_power)
 
+            # Account for inertia
             out = movement_model(out, wpow)
+
+            # Calculate the orientation after current cycle
             theta += rotation_model(out)
-            theta = theta % (2 * pi)
-            # theta - compass is a bit useless because compass is in [-pi, pi] while theta is in [0, 2pi]
-            print("theta - compass = ", degrees((theta - compass)))
+            theta = adjust_angle(theta)
+
+            # Estimate coordinates after current cycle
             coordinates = gps_model(coordinates, out, theta)
-            print("coordinates - gps = ", abs(x - coordinates[0]), abs(y - coordinates[1]))
-            
-            out = (left_power, right_power)
+
+            # Fixate coordinates with respect to axis of movement
+            if (error == 0):
+                coordinates = fixate_coordinates(coordinates, theta, compass)
+
+            out = (left_power, right_power) # used to help with out(t-1)
+            ## END MOVEMENT MODEL
 
             # Drive motors with adjusted power
             self.driveMotors(left_power, right_power)
+
+            print(f"x: {coordinates[0]:.2f}, y: {coordinates[1]:.2f}")
 
 class Map():
     def __init__(self, filename):

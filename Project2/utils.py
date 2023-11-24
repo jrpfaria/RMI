@@ -1,5 +1,5 @@
 import math
-from math import cos, sin, pi
+from math import cos, sin, pi, degrees, radians
 
 PATTERNS = [
     [1, 0, 0, 0, 0, 0, 0],
@@ -19,6 +19,11 @@ def calculate_out(prev_power, power):
 
     return ((left_prev_power + left_power) / 2, (right_prev_power + right_power) / 2)
 
+def adjust_angle(theta):
+    theta = theta % (2 * pi)
+    if theta > pi:
+        theta -= 2 * pi
+    return theta
 
 def get_last_direction(history):
     weighted_sum = 0
@@ -185,7 +190,7 @@ def movement_model(out, wpow, gauss_noise = 1):
     l_out = ((l_in + l_out) / 2) * gauss_noise
     r_out = ((r_in + r_out) / 2) * gauss_noise
 
-    return out
+    return (l_out, r_out)
 
 def rotation_model(power, D = 1):
     lpow, rpow = power
@@ -205,3 +210,28 @@ def gps_model(pos, out, theta):
     gps_y = y + lin * sin(theta)
 
     return (gps_x, gps_y)
+
+def fixate_coordinates(coordinates, theta, compass, k = 2, delta = 15):
+    x, y = coordinates
+
+    delta = radians(delta)
+    angle = theta if (abs(theta - compass) < k) else compass
+
+    if (-delta) < angle < (delta) or angle > (pi - delta) or angle < (-pi + delta):
+        y = find_closest_even(y)
+     
+    if (pi/2 - delta) < angle < (pi/2 + delta) or (-pi/2 - delta) < angle < (-pi/2 + delta):
+        x = find_closest_even(x)
+    
+    return (x, y)
+
+
+def find_closest_even(number):
+    rounded_number = round(number)
+
+    if rounded_number % 2 == 0:
+        return rounded_number
+
+    closest_even_number = rounded_number + 1 if rounded_number % 2 != 0 else rounded_number - 1
+
+    return closest_even_number
