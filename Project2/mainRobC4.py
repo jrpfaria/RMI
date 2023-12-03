@@ -44,9 +44,9 @@ class MyRob(CRobLinkAngs):
         # Read sensor values (0s and 1s)
         self.readSensors()
 
-        while not self.measures.start:
-            # Read sensor values (0s and 1s)
-            self.readSensors()
+        # while not self.measures.start:
+        #     # Read sensor values (0s and 1s)
+        #     self.readSensors()
 
 
         # Initialize variables for movement model
@@ -54,13 +54,35 @@ class MyRob(CRobLinkAngs):
         coordinates = (0, 0)    # Coordinates
         out = (0, 0)            # Step
         theta = 0               # Angle
+
+        # Initialize variables for mapping
+        prev_target = (0,0)     # Previous target
+        target = (2,0)          # Target
+        history = []            # History of directions
         
+        MAP_ROWS=21
+        MAP_COLS=49
+        MAP_SHAPE=(MAP_ROWS, MAP_COLS)
+        MAP_START_X=24
+        MAP_START_Y=10
+        MAP_START = (MAP_START_X, MAP_START_Y)
+
+        pmap = [[" " for _ in range(MAP_COLS)] for _ in range(MAP_ROWS)]
+
+        pmap[MAP_START_Y][MAP_START_X] = "I"
+
         while True:
             self.readSensors()
 
             # Get the line and compass values
             line = self.measures.lineSensor
             compass = radians(self.measures.compass) # Converted to radians to normalize calculations
+
+            history.append(line)
+            if len(history) > 7:
+                history.pop(0)
+            
+            paths = find_paths(history)
 
             # Calculate the error
             error = center_of_mass(line, step, base) - base
@@ -96,11 +118,23 @@ class MyRob(CRobLinkAngs):
 
             # Estimate coordinates after current cycle
             coordinates = gps_model(coordinates, out, theta)
+            
+            ### MAPPING CHALLENGE ### 
+            
+            if is_close(coordinates, target, 0.1):
+                unknowns = pick_path(paths, prev_target, target)
+                pmap = update_map(paths, pmap, MAP_START, prev_target, target)
+
+                prev_target = target
+                # target = next_target(target, paths)
 
             # Fixate coordinates with respect to axis of movement
-            if (error == 0):
-                coordinates = fixate_coordinates(coordinates, theta, compass)
+            if error == 0:
+                coordinates = fixate_coordinates(coordinates, theta, compass, prev_target, target)
 
+
+            ### END MAPPING CHALLENGE ###
+            
             out = (left_power, right_power) # used to help with out(t-1)
             ## END MOVEMENT MODEL
 
@@ -108,6 +142,7 @@ class MyRob(CRobLinkAngs):
             self.driveMotors(left_power, right_power)
 
             print(f"x: {coordinates[0]:.2f}, y: {coordinates[1]:.2f}")
+            print(paths)
 
 class Map():
     def __init__(self, filename):

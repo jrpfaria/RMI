@@ -1,5 +1,5 @@
 import math
-from math import cos, sin, pi, degrees, radians
+from math import cos, sin, pi, degrees, radians, sqrt
 
 PATTERNS = [
     [1, 0, 0, 0, 0, 0, 0],
@@ -211,7 +211,7 @@ def gps_model(pos, out, theta):
 
     return (gps_x, gps_y)
 
-def fixate_coordinates(coordinates, theta, compass, k = 2, delta = 15):
+def fixate_coordinates(coordinates, theta, compass, k = 2, delta = 15, prev_target = (0, 0), target = (0, 0)):
     x, y = coordinates
 
     delta = radians(delta)
@@ -223,6 +223,30 @@ def fixate_coordinates(coordinates, theta, compass, k = 2, delta = 15):
     if (pi/2 - delta) < angle < (pi/2 + delta) or (-pi/2 - delta) < angle < (-pi/2 + delta):
         x = find_closest_even(x)
     
+    if pi/4 - delta < angle < pi/4 + delta:
+        dist = sqrt(euclidian_distance(prev_target, target))
+        x = find_closest_even(x)
+        y = find_closest_even(y)
+        return (x + dist, y + dist)
+    
+    if -3*pi/4 - delta < angle < -3*pi/4 + delta:
+        dist = sqrt(euclidian_distance(prev_target, target))
+        x = find_closest_even(x)
+        y = find_closest_even(y)
+        return (x - dist, y - dist)
+    
+    if 3*pi/4 - delta < angle < 3*pi/4 + delta:
+        dist = sqrt(euclidian_distance(prev_target, target))
+        x = find_closest_even(x)
+        y = find_closest_even(y)
+        return (x - dist, y + dist)
+    
+    if -pi/4 - delta < angle < -pi/4 + delta:
+        dist = sqrt(euclidian_distance(prev_target, target))
+        x = find_closest_even(x)
+        y = find_closest_even(y)
+        return (x + dist, y - dist)
+
     return (x, y)
 
 
@@ -235,3 +259,361 @@ def find_closest_even(number):
     closest_even_number = rounded_number + 1 if rounded_number % 2 != 0 else rounded_number - 1
 
     return closest_even_number
+
+def euclidian_distance(p1, p2):
+    x1, y1 = p1
+    x2, y2 = p2
+
+    return math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+
+def is_close(p1, p2, threshold = 0.5, distance = euclidian_distance):
+    return distance(p1, p2) < threshold
+
+def find_paths(history):
+    # paths initialized with 'fwd' because we check
+    # if it doesn't exist over the course of the algorithm
+    paths = []
+    paths.append('fwd')
+    
+    hl = hr = 0
+
+    for i in range(len(history) - 1):
+        # aux variables to make the code more readable
+        line = history[i]
+        next_line = history[i + 1]
+
+        if "1" in line[2:5]:
+            # history:
+            # xx111xx  
+            if "1" in line[0:2]:
+                # history:
+                # 01111xx (next_line)
+                # 10111xx (line)
+                if line[0] == next_line[1] == "1" and line[1] == next_line[0] == "0" and "0" not in line[2:5]:
+                    paths.append('lh')
+                
+                # history:
+                # 11xxxxx (line)
+                # 01111xx (next_line)
+                if line[0] == "0" and line[1] == "1" and "0" not in next_line[0:2]: 
+                    paths.append('sl')
+
+                # history:
+                # 11111xx (line)
+                if "0" not in line[2:5]:
+                    hl += 1
+
+            if "1" in line[5:]:
+                # history:
+                # xx11110 (next_line)
+                # xx11101 (line)
+                if line[5] == next_line[4] == "1" and line[6] == next_line[5] == "0" and "0" not in line[2:5]:
+                    paths.append('rh')
+                
+                # history:
+                # xxxxx11 (next_line)
+                # xx11110 (line)
+                if line[6] == "0" and line[5] == "1" and "0" not in next_line[5:]:
+                    paths.append('sr')
+
+                # history:
+                # xx11111 (line)
+                if "0" not in line[2:5]:
+                    hr += 1
+
+        # history:
+        # xxx0xxx (line)
+        if line[3] == "0":
+            paths.remove('fwd')    
+    
+    if hl >= 2:
+        paths.append('hl')
+    elif hl == 1 and 'lh' not in paths and 'sl' not in paths:
+        paths.append('hr')
+
+    if hr >= 2:
+        paths.append('hr')
+    elif hr == 1 and 'rh' not in paths and 'sr' not in paths:
+        paths.append('hl')
+
+    return list(set(paths))
+
+def pick_path(paths, prev_target, target):  
+    unknowns = []
+    x, y = target
+    px, py = prev_target
+
+    dx = x - px
+    dy = y - py
+
+    if 'fwd' in paths:
+        unknowns.append((x + dx, y + dy, 0))
+    
+    if 'sr' in paths:
+        # Soft right (-45º)
+        if dx == 0 and dy > 0:
+            unknowns.append((x + 2, y + 2, 1))
+        elif dx == 0 and dy < 0:
+            unknowns.append((x - 2, y - 2, 1))
+        elif dx > 0 and dy == 0:
+            unknowns.append((x + 2, y - 2, 1))
+        elif dx < 0 and dy == 0:
+            unknowns.append((x - 2, y + 2, 1))
+        elif dx > 0 and dy < 0:
+            unknowns.append((x, y - 2, 1))
+        elif dx < 0 and dy > 0:
+            unknowns.append((x, y + 2, 1))
+        elif dx > 0 and dy > 0:
+            unknowns.append((x + 2, y, 1))
+        elif dx < 0 and dy < 0:
+            unknowns.append((x - 2, y, 1))
+
+    if 'sl' in paths:
+        # Soft left (45º)     
+        if dx == 0 and dy > 0:
+            unknowns.append((x - 2, y + 2, 1))
+        elif dx == 0 and dy < 0:
+            unknowns.append((x + 2, y - 2, 1))
+        elif dx > 0 and dy == 0:
+            unknowns.append((x + 2, y + 2, 1))
+        elif dx < 0 and dy == 0:
+            unknowns.append((x - 2, y - 2, 1))
+        elif dx > 0 and dy < 0:
+            unknowns.append((x + 2, y, 1))
+        elif dx < 0 and dy > 0:
+            unknowns.append((x - 2, y, 1))
+        elif dx > 0 and dy > 0:
+            unknowns.append((x, y + 2, 1))
+        elif dx < 0 and dy < 0:
+            unknowns.append((x, y - 2, 1))
+
+    if 'hr' in paths:
+        # Handle hard right (-90º)
+        if dx == 0 and dy > 0:
+            unknowns.append((x + 2, y, 2))
+        elif dx == 0 and dy < 0:
+            unknowns.append((x - 2, y, 2))
+        elif dx > 0 and dy == 0:
+            unknowns.append((x, y - 2, 2))
+        elif dx < 0 and dy == 0:
+            unknowns.append((x, y + 2, 2))
+        elif dx > 0 and dy < 0:
+            unknowns.append((x - 2, y - 2, 2))
+        elif dx < 0 and dy > 0:
+            unknowns.append((x + 2, y + 2, 2))
+        elif dx > 0 and dy > 0:
+            unknowns.append((x + 2, y - 2, 2))
+        elif dx < 0 and dy < 0:
+            unknowns.append((x - 2, y + 2, 2))
+
+    if 'hl' in paths:
+        # Handle hard left (90º)
+        if dx == 0 and dy > 0:
+            unknowns.append((x - 2, y, 2))
+        elif dx == 0 and dy < 0:
+            unknowns.append((x + 2, y, 2))
+        elif dx > 0 and dy == 0:
+            unknowns.append((x, y + 2, 2))
+        elif dx < 0 and dy == 0:
+            unknowns.append((x, y - 2, 2))
+        elif dx > 0 and dy < 0:
+            unknowns.append((x + 2, y + 2, 2))
+        elif dx < 0 and dy > 0:
+            unknowns.append((x - 2, y - 2, 2))
+        elif dx > 0 and dy > 0:
+            unknowns.append((x - 2, y + 2, 2))
+        elif dx < 0 and dy < 0:
+            unknowns.append((x + 2, y - 2, 2))
+
+    if 'rh' in paths:
+        # Right hook (-135º)
+        if dx == 0 and dy > 0:
+            unknowns.append((x + 2, y - 2, 3))
+        elif dx == 0 and dy < 0:
+            unknowns.append((x - 2, y + 2, 3))
+        elif dx > 0 and dy == 0:
+            unknowns.append((x - 2, y - 2, 3))
+        elif dx < 0 and dy == 0:
+            unknowns.append((x + 2, y + 2, 3))
+        elif dx > 0 and dy < 0:
+            unknowns.append((x - 2, y, 3))
+        elif dx < 0 and dy > 0:
+            unknowns.append((x + 2, y, 3))
+        elif dx > 0 and dy > 0:
+            unknowns.append((x, y - 2, 3))
+        elif dx < 0 and dy < 0:
+            unknowns.append((x, y + 2, 3))
+
+    if 'lh' in paths:
+        # Left hook (135º)
+        if dx == 0 and dy > 0:
+            unknowns.append((x - 2, y - 2, 3))
+        elif dx == 0 and dy < 0:
+            unknowns.append((x + 2, y + 2, 3))
+        elif dx > 0 and dy == 0:
+            unknowns.append((x - 2, y + 2, 3))
+        elif dx < 0 and dy == 0:
+            unknowns.append((x + 2, y - 2, 3))
+        elif dx > 0 and dy < 0:
+            unknowns.append((x, y + 2, 3))
+        elif dx < 0 and dy > 0:
+            unknowns.append((x, y - 2, 3))
+        elif dx > 0 and dy > 0:
+            unknowns.append((x - 2, y, 3))
+        elif dx < 0 and dy < 0:
+            unknowns.append((x + 2, y, 3))
+
+    return unknowns
+
+def update_map(paths, pmap, map_start, prev_target, target):
+    mx, my = map_start
+    x, y = target
+    px, py = prev_target
+
+    # y - line
+    # x - column
+
+    dx = x - px # column
+    dy = y - py # row
+
+    cx = mx + x
+    cy = my - y
+
+    # y subir -> -1
+    # y descer -> +1
+    # x subit -> +1
+    # x descer -> -1
+
+    if 'fwd' in paths:
+        if dx == 0 and dy > 0:
+            pmap[cy - 1][cx] = "|"
+        elif dx == 0 and dy < 0:
+            pmap[cy + 1][cx] = "|"
+        elif dx > 0 and dy == 0:
+            pmap[cy][cx + 1] = "-"
+        elif dx < 0 and dy == 0:
+            pmap[cy][cx - 1] = "-"
+        elif dx > 0 and dy > 0:
+            pmap[cy - 1][cx + 1] = "/"
+        elif dx < 0 and dy > 0:
+            pmap[cy - 1][cx - 1] = "\\"
+        elif dx > 0 and dy < 0:
+            pmap[cy + 1][cx + 1] = "\\"
+        elif dx < 0 and dy < 0:
+            pmap[cy + 1][cx - 1] = "/"
+    
+    if 'sr' in paths:
+        if dx == 0 and dy > 0:
+            pmap[cy - 1][cx + 1] = "/"
+        elif dx == 0 and dy < 0:
+            pmap[cy + 1][cx - 1] = "/"
+        elif dx > 0 and dy == 0:
+            pmap[cy + 1][cx + 1] = "\\"
+        elif dx < 0 and dy == 0:
+            pmap[cy - 1][cx - 1] = "\\"
+        elif dx > 0 and dy > 0:
+            pmap[cy][cx + 1] = "-"
+        elif dx < 0 and dy > 0:
+            pmap[cy - 1][cx] = "|"
+        elif dx > 0 and dy < 0:
+            pmap[cy + 1][cx] = "|"
+        elif dx < 0 and dy < 0:
+            pmap[cy][cx - 1] = "-"
+
+    if 'sl' in paths:
+        if dx == 0 and dy > 0:
+            pmap[cy - 1][cx - 1] = "\\"
+        elif dx == 0 and dy < 0:
+            pmap[cy + 1][cx + 1] = "\\"
+        elif dx > 0 and dy == 0:
+            pmap[cy - 1][cx + 1] = "/"
+        elif dx < 0 and dy == 0:
+            pmap[cy + 1][cx - 1] = "/"
+        elif dx > 0 and dy > 0:
+            pmap[cy - 1][cx] = "|"
+        elif dx < 0 and dy > 0:
+            pmap[cy][cx - 1] = "-"
+        elif dx > 0 and dy < 0:
+            pmap[cy][cx + 1] = "-"
+        elif dx < 0 and dy < 0:
+            pmap[cy + 1][cx] = "|"
+
+    if 'hr' in paths:
+        if dx == 0 and dy > 0:
+            pmap[cy][cx + 1] = "-"
+        elif dx == 0 and dy < 0:
+            pmap[cy][cx - 1] = "-"
+        elif dx > 0 and dy == 0:
+            pmap[cy + 1][cx] = "|"
+        elif dx < 0 and dy == 0:
+            pmap[cy - 1][cx] = "|"
+        elif dx > 0 and dy > 0:
+            pmap[cy + 1][cx + 1] = "\\"
+        elif dx < 0 and dy > 0:
+            pmap[cy - 1][cx + 1] = "/"
+        elif dx > 0 and dy < 0:
+            pmap[cy + 1][cx - 1] = "/"
+        elif dx < 0 and dy < 0:
+            pmap[cy - 1][cx - 1] = "\\"
+
+    if 'hl' in paths:
+        if dx == 0 and dy > 0:
+            pmap[cy][cx - 1] = "-"
+        elif dx == 0 and dy < 0:
+            pmap[cy][cx + 1] = "-"
+        elif dx > 0 and dy == 0:
+            pmap[cy - 1][cx] = "|"
+        elif dx < 0 and dy == 0:
+            pmap[cy + 1][cx] = "|"
+        elif dx > 0 and dy > 0:
+            pmap[cy - 1][cx - 1] = "\\"
+        elif dx < 0 and dy > 0:
+            pmap[cy + 1][cx - 1] = "/"
+        elif dx > 0 and dy < 0:
+            pmap[cy - 1][cx + 1] = "/"
+        elif dx < 0 and dy < 0:
+            pmap[cy + 1][cx + 1] = "\\"
+
+    if 'rh' in paths:
+        if dx == 0 and dy > 0:
+            pmap[cy + 1][cx + 1] = "\\"
+        elif dx == 0 and dy < 0:
+            pmap[cy - 1][cx - 1] = "\\"
+        elif dx > 0 and dy == 0:
+            pmap[cy + 1][cx - 1] = "/"
+        elif dx < 0 and dy == 0:
+            pmap[cy - 1][cx + 1] = "/"
+        elif dx > 0 and dy > 0:
+            pmap[cy + 1][cx] = "|"
+        elif dx < 0 and dy > 0:
+            pmap[cy][cx + 1] = "-"
+        elif dx > 0 and dy < 0:
+            pmap[cy][cx - 1] = "-"
+        elif dx < 0 and dy < 0:
+            pmap[cy - 1][cx] = "|"
+
+    if 'lh' in paths:
+        if dx == 0 and dy > 0:
+            pmap[cy + 1][cx - 1] = "/"
+        elif dx == 0 and dy < 0:
+            pmap[cy - 1][cx + 1] = "/"
+        elif dx > 0 and dy == 0:
+            pmap[cy - 1][cx - 1] = "\\"
+        elif dx < 0 and dy == 0:
+            pmap[cy + 1][cx + 1] = "\\"
+        elif dx > 0 and dy > 0:
+            pmap[cy][cx - 1] = "-"
+        elif dx < 0 and dy > 0:
+            pmap[cy + 1][cx] = "|"
+        elif dx > 0 and dy < 0:
+            pmap[cy - 1][cx] = "|"
+        elif dx < 0 and dy < 0:
+            pmap[cy][cx + 1] = "-"
+
+    return pmap
+
+
+
+
+
+
