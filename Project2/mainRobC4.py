@@ -28,7 +28,7 @@ class MyRob(CRobLinkAngs):
             quit()
 
         # Constants for PID controller
-        Kp = 3.0000  # Proportional constant
+        Kp = 3.0000 # Proportional constant
         Ki = 0.0000  # Integral constant
         Kd = 0.0000  # Derivative constant
 
@@ -37,16 +37,16 @@ class MyRob(CRobLinkAngs):
         integral = 0
 
         step = 0.08
-        n_sensor = 7
+        n_sensor = 3 # 7
         base = get_base(n_sensor, step)
-        base_speed = 0.15
+        base_speed = 0.1
 
         # Read sensor values (0s and 1s)
         self.readSensors()
 
-        # while not self.measures.start:
-        #     # Read sensor values (0s and 1s)
-        #     self.readSensors()
+        while not self.measures.start:
+            # Read sensor values (0s and 1s)
+            self.readSensors()
 
 
         # Initialize variables for movement model
@@ -56,6 +56,7 @@ class MyRob(CRobLinkAngs):
         theta = 0               # Angle
 
         # Initialize variables for mapping
+        paths = []              # Paths
         prev_target = (0,0)     # Previous target
         target = (2,0)          # Target
         history = []            # History of directions
@@ -84,10 +85,8 @@ class MyRob(CRobLinkAngs):
             if len(history) > 7:
                 history.pop(0)
             
-            paths = find_paths(history)
-
             # Calculate the error
-            error = center_of_mass(line, step, base) - base
+            error = center_of_mass(line[2:5], step, base) - base
 
             # Calculate the integral term
             integral += error
@@ -120,32 +119,46 @@ class MyRob(CRobLinkAngs):
 
             # Estimate coordinates after current cycle
             coordinates = gps_model(coordinates, out, theta)
+
+            print(f"target: {target}")
+            print(f"prev_target: {prev_target}")
             
             ### MAPPING CHALLENGE ### 
             if is_close(coordinates, target, 0.2):
                 paths = find_paths(history)
+                
                 unknowns = get_paths(paths, prev_target, target)
                 pmap = update_map(paths, pmap, MAP_START, prev_target, target)
                 g.add_nodes_from(unknowns)
                 ## g.add_edges_from
-                # check best unknown path
-                target = next_target(unknowns)
-    
-
-
+                # check best unknown path    
 
                 prev_target = target
                 
+                target = next_target(unknowns)
+
+                if target is None or target in g.visited:
+                    target = prev_target
+                
                 # target = next_target(target, paths)
-                # atan2
+                # atan2 : on_spot_error(coordinates, target, theta)
 
                 if target == prev_target:
+                    pass
                     # rotate 180 degrees
+                
+                while ((error := degrees(on_spot_error(coordinates, target, compass))) > 15 or error < -15):
+                    self.readSensors()
+                    compass = radians(self.measures.compass)
+                    error = max(min(error, 0.08), -0.08)
+                    self.driveMotors(-error, error)
+
+
 
             # Fixate coordinates with respect to axis of movement
             if error == 0:
-                coordinates = fixate_coordinates(coordinates, theta, compass, prev_target, target)
-
+                theta = fixate_theta(compass) # :)
+                coordinates = fixate_coordinates(coordinates, theta, prev_target)
 
             ### END MAPPING CHALLENGE ###
             
@@ -156,6 +169,7 @@ class MyRob(CRobLinkAngs):
             self.driveMotors(left_power, right_power)
 
             print(f"x: {coordinates[0]:.2f}, y: {coordinates[1]:.2f}")
+            print(f"theta: {degrees(theta):.2f}")
             print(paths)
 
 class Map():

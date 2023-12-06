@@ -1,5 +1,5 @@
 import math
-from math import cos, sin, pi, degrees, radians, sqrt
+from math import cos, sin, pi, degrees, radians, sqrt, atan2
 
 PATTERNS = [
     [1, 0, 0, 0, 0, 0, 0],
@@ -37,6 +37,15 @@ def get_last_direction(history):
     weighted_average = weighted_sum / total_weight
     return weighted_average
 
+def write_map_to_file(mapa, output = "map.out"):
+    with open(output, "w") as file:
+        file.write(get_map_string(mapa))
+
+def get_map_string(mapa):
+    return "\n".join(["".join(row) for row in mapa])
+
+def print_map(mapa):
+    print(get_map_string(mapa), end="\r")
 
 def print_sensor_readings(line):
     print("".join(line))
@@ -211,44 +220,67 @@ def gps_model(pos, out, theta):
 
     return (gps_x, gps_y)
 
-def fixate_coordinates(coordinates, theta, compass, k = 2, delta = 15, prev_target = (0, 0), target = (0, 0)):
+def fixate_coordinates(coordinates, theta, prev_target = (0, 0), target = (0, 0), k = 2, delta = 15):
     x, y = coordinates
+    old_x, old_y = prev_target
 
     delta = radians(delta)
-    angle = theta if (abs(theta - compass) < k) else compass
+    angle = theta
 
     if (-delta) < angle < (delta) or angle > (pi - delta) or angle < (-pi + delta):
         y = find_closest_even(y)
+        return (x, y)
      
     if (pi/2 - delta) < angle < (pi/2 + delta) or (-pi/2 - delta) < angle < (-pi/2 + delta):
         x = find_closest_even(x)
+        return (x, y)
     
     if pi/4 - delta < angle < pi/4 + delta:
-        dist = sqrt(euclidian_distance(prev_target, target))
-        x = find_closest_even(x)
-        y = find_closest_even(y)
-        return (x + dist, y + dist)
+        dist = sqrt(euclidian_distance(prev_target, coordinates))
+        return (old_x + dist, old_y + dist)
     
     if -3*pi/4 - delta < angle < -3*pi/4 + delta:
-        dist = sqrt(euclidian_distance(prev_target, target))
-        x = find_closest_even(x)
-        y = find_closest_even(y)
-        return (x - dist, y - dist)
+        dist = sqrt(euclidian_distance(prev_target, coordinates))
+        return (old_x - dist, old_y - dist)
     
     if 3*pi/4 - delta < angle < 3*pi/4 + delta:
-        dist = sqrt(euclidian_distance(prev_target, target))
-        x = find_closest_even(x)
-        y = find_closest_even(y)
-        return (x - dist, y + dist)
+        dist = sqrt(euclidian_distance(prev_target, coordinates))
+        return (old_x - dist, old_y + dist)
     
     if -pi/4 - delta < angle < -pi/4 + delta:
-        dist = sqrt(euclidian_distance(prev_target, target))
-        x = find_closest_even(x)
-        y = find_closest_even(y)
-        return (x + dist, y - dist)
+        dist = sqrt(euclidian_distance(prev_target, coordinates))
+        return (old_x + dist, old_y - dist)
 
     return (x, y)
 
+def fixate_theta(angle, delta = 15):
+    delta = radians(delta)
+
+    if -delta < angle < delta:
+        return 0
+    
+    if pi - delta < angle < -pi + delta:
+        return pi
+
+    if (pi/2 - delta) < angle < (pi/2 + delta):
+        return pi/2
+        
+    if (-pi/2 - delta) < angle < (-pi/2 + delta):
+        return -pi/2
+
+    if (pi/4 - delta) < angle < (pi/4 + delta):
+        return pi/4
+    
+    if -3*pi/4 - delta < angle < -3*pi/4 + delta:
+        return -3*pi/4
+    
+    if 3*pi/4 - delta < angle < 3*pi/4 + delta:
+        return 3*pi/4
+    
+    if -pi/4 - delta < angle < -pi/4 + delta:
+        return -pi/4
+    
+    return angle
 
 def find_closest_even(number):
     rounded_number = round(number)
@@ -267,13 +299,12 @@ def euclidian_distance(p1, p2):
     return math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
 
 def is_close(p1, p2, threshold = 0.5, distance = euclidian_distance):
-    return euclidian_distance(p1, p2) < threshold
+    return distance(p1, p2) < threshold
 
 def find_paths(history):
     # paths initialized with 'fwd' because we check
     # if it doesn't exist over the course of the algorithm
     paths = []
-    paths.append('fwd')
     
     hl = hr = 0
 
@@ -319,22 +350,20 @@ def find_paths(history):
                 # history:
                 # xx11111 (line)
                 if "0" not in line[2:5]:
-                    hr += 1
-
-        # history:
-        # xxx0xxx (line)
-        if line[3] == "0":
-            paths.remove('fwd')    
+                    hr += 1  
     
+    # if history[-1][3] == "1":
+    #     paths.append('fwd')
+
     if hl >= 2:
         paths.append('hl')
     elif hl == 1 and 'lh' not in paths and 'sl' not in paths:
-        paths.append('hr')
+        paths.append('hl')
 
     if hr >= 2:
         paths.append('hr')
     elif hr == 1 and 'rh' not in paths and 'sr' not in paths:
-        paths.append('hl')
+        paths.append('hr')
 
     return list(set(paths))
 
@@ -610,11 +639,19 @@ def update_map(paths, pmap, map_start, prev_target, target):
         elif dx < 0 and dy < 0:
             pmap[cy][cx + 1] = "-"
 
+    write_map_to_file(pmap, "map.out")
     return pmap
 
 def next_target(unknowns):
-    return min(unknowns, key = lambda x: x[2])
+    return min(unknowns, key=lambda x: x[2])[:2] if unknowns else None
     
+def on_spot_error(actual, target, compass):
+    x, y = actual
+    target_x, target_y = target
 
+    angle_to_target = atan2(target_y - y, target_x - x)
+    angle_difference = angle_to_target - compass
 
-
+    angle_difference = adjust_angle(angle_difference)
+        
+    return 0.5 * angle_difference
