@@ -3,7 +3,7 @@ import sys
 from croblink import *
 from math import *
 import xml.etree.ElementTree as ET
-
+from graph import *
 from utils import *
 
 CELLROWS=7
@@ -71,6 +71,8 @@ class MyRob(CRobLinkAngs):
 
         pmap[MAP_START_Y][MAP_START_X] = "I"
 
+        g = Graph()
+
         while True:
             self.readSensors()
 
@@ -120,13 +122,25 @@ class MyRob(CRobLinkAngs):
             coordinates = gps_model(coordinates, out, theta)
             
             ### MAPPING CHALLENGE ### 
-            
-            if is_close(coordinates, target, 0.1):
-                unknowns = pick_path(paths, prev_target, target)
+            if is_close(coordinates, target, 0.2):
+                paths = find_paths(history)
+                unknowns = get_paths(paths, prev_target, target)
                 pmap = update_map(paths, pmap, MAP_START, prev_target, target)
+                g.add_nodes_from(unknowns)
+                ## g.add_edges_from
+                # check best unknown path
+                target = next_target(unknowns)
+    
+
+
 
                 prev_target = target
+                
                 # target = next_target(target, paths)
+                # atan2
+
+                if target == prev_target:
+                    # rotate 180 degrees
 
             # Fixate coordinates with respect to axis of movement
             if error == 0:

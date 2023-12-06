@@ -267,7 +267,7 @@ def euclidian_distance(p1, p2):
     return math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
 
 def is_close(p1, p2, threshold = 0.5, distance = euclidian_distance):
-    return distance(p1, p2) < threshold
+    return euclidian_distance(p1, p2) < threshold
 
 def find_paths(history):
     # paths initialized with 'fwd' because we check
@@ -338,7 +338,7 @@ def find_paths(history):
 
     return list(set(paths))
 
-def pick_path(paths, prev_target, target):  
+def get_paths(paths, prev_target, target):  
     unknowns = []
     x, y = target
     px, py = prev_target
@@ -612,8 +612,9 @@ def update_map(paths, pmap, map_start, prev_target, target):
 
     return pmap
 
-
-
+def next_target(unknowns):
+    return min(unknowns, key = lambda x: x[2])
+    
 
 
 
