@@ -34,6 +34,7 @@ class Graph:
         self.nodes = set()
         self.visited = set()
         self.edges = {}
+        self.beacons = set()
 
     def unknown_nodes(self):
         return self.nodes.difference(self.visited)
@@ -48,6 +49,8 @@ class Graph:
         self.edges.setdefault(node1, []).append((node2, cost))
         self.edges.setdefault(node2, []).append((node1, cost))
 
+    def add_beacon(self, number, node):
+        self.beacons.add((number, node))
 
     def astar(self, start, goal):
         open_set = []   # Priority queue for nodes to be evaluated

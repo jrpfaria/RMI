@@ -28,18 +28,7 @@ class MyRob(CRobLinkAngs):
             quit()
 
         # Constants for PID controller
-        Kp = 3.0000 # Proportional constant
-        Ki = 0.0000  # Integral constant
-        Kd = 0.0000  # Derivative constant
-
-        # Initialize variables for PID controller
-        last_error = 0
-        integral = 0
-
-        step = 0.08
-        n_sensor = 3 # 7
-        base = get_base(n_sensor, step)
-        base_speed = 0.1
+        STEP = 0.08
 
         # Read sensor values (0s and 1s)
         self.readSensors()
@@ -48,19 +37,25 @@ class MyRob(CRobLinkAngs):
             # Read sensor values (0s and 1s)
             self.readSensors()
 
+        # Name of the file to write the map to
+        FILENAME = "map.out"
 
         # Initialize variables for movement model
-        wpow = (0, 0)           # Wheel Power
         coordinates = (0, 0)    # Coordinates
         out = (0, 0)            # Step
         theta = 0               # Angle
 
         # Initialize variables for mapping
+        freely_moving = False   # Flag to indicate if robot is just moving forward
         paths = []              # Paths
         prev_target = (0,0)     # Previous target
         target = (2,0)          # Target
         history = []            # History of directions
         
+        # Initialize variables for robot movement
+        left_power = 0          # Left motor power
+        right_power = 0         # Right motor power
+
         MAP_ROWS=21
         MAP_COLS=49
         MAP_SHAPE=(MAP_ROWS, MAP_COLS)
@@ -74,6 +69,10 @@ class MyRob(CRobLinkAngs):
 
         g = Graph()
 
+        if (self.measures.ground != -1):
+            pmap[MAP_START_Y][MAP_START_X] = str(self.measures.ground)
+            g.add_beacon(self.measures.ground, MAP_START)
+
         while True:
             self.readSensors()
 
@@ -84,19 +83,30 @@ class MyRob(CRobLinkAngs):
             history.append(line)
             if len(history) > 7:
                 history.pop(0)
-            
+
             # Calculate the error
-            error = center_of_mass(line[2:5], step, base) - base
+            if is_close(coordinates, target, 0.438):
+                Kp = 0
+                base_speed = 0.06
+                n_sensors = 3
+            elif is_close(coordinates, target, 1.6):
+                Kp = 2
+                base_speed = 0.1
+                n_sensors = 3
+            elif is_close(coordinates, target, 1.9):
+                Kp = 4
+                base_speed = 0.15
+                n_sensors = 7
+            else:
+                Kp = 5
+                base_speed = 0.15
+                n_sensors = 3
 
-            # Calculate the integral term
-            integral += error
-
-            # Calculate the derivative term
-            derivative = error - last_error
-            last_error = error
+            evaluated_line = centered_line(line, n_sensors)
+            error = center_of_mass(evaluated_line, STEP)
 
             # Calculate the control output (PID)
-            control = Kp * error + Ki * integral + Kd * derivative
+            control = Kp * error
 
             # Calculate motor powers
             left_power = base_speed + control
@@ -106,29 +116,31 @@ class MyRob(CRobLinkAngs):
             left_power = min(max(left_power, -0.15), +0.15)
             right_power = min(max(right_power, -0.15), +0.15)
 
-            # MOVEMENT MODEL
-            # Wheel Power for current cycle
-            wpow = (left_power, right_power)
-
-            # Account for inertia
-            out = movement_model(out, wpow)
-
-            # Calculate the orientation after current cycle
-            theta += rotation_model(out)
-            theta = adjust_angle(theta)
-
-            # Estimate coordinates after current cycle
-            coordinates = gps_model(coordinates, out, theta)
+            ### MOVEMENT MODEL ###
+            coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
 
             print(f"target: {target}")
             print(f"prev_target: {prev_target}")
             
             ### MAPPING CHALLENGE ### 
             if is_close(coordinates, target, 0.2):
+                
+                if (self.measures.ground != -1):
+                    target_x, target_y = target
+                    pmap[target_y][target_x] = str(self.measures.ground)
+                    g.add_beacon(self.measures.ground, target)
+
+                theta = fixate_theta(compass)
+                coordinates = fixate_coordinates(coordinates, theta)
+                
                 paths = find_paths(history)
+                print(f"paths: {paths}")
                 
                 unknowns = get_paths(paths, prev_target, target)
                 pmap = update_map(paths, pmap, MAP_START, prev_target, target)
+
+                write_map_to_file(pmap, FILENAME)
+
                 g.add_nodes_from(unknowns)
                 ## g.add_edges_from
                 # check best unknown path    
@@ -143,22 +155,25 @@ class MyRob(CRobLinkAngs):
                 # target = next_target(target, paths)
                 # atan2 : on_spot_error(coordinates, target, theta)
 
-                if target == prev_target:
-                    pass
-                    # rotate 180 degrees
-                
-                while ((error := degrees(on_spot_error(coordinates, target, compass))) > 15 or error < -15):
-                    self.readSensors()
-                    compass = radians(self.measures.compass)
-                    error = max(min(error, 0.08), -0.08)
-                    self.driveMotors(-error, error)
+                error = degrees(on_spot_error(coordinates, target, theta))
 
+                while (abs(error) > 15):
+                    # print(f"error: {error}")
+                    self.readSensors()
+                    error = max(min(error, 0.15), -0.15)
+                    left_power, right_power = (-error, error)
+                    coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
+                    out = (left_power, right_power)
+                    self.driveMotors(left_power, right_power)
+                    error = degrees(on_spot_error(coordinates, target, theta))
+                
+                # go forward a bit
 
 
             # Fixate coordinates with respect to axis of movement
-            if error == 0:
-                theta = fixate_theta(compass) # :)
-                coordinates = fixate_coordinates(coordinates, theta, prev_target)
+            if error == 0 or "1" == line[0] or "1" == line[6]:
+                theta = fixate_theta(compass)
+                coordinates = fixate_coordinates(coordinates, theta)
 
             ### END MAPPING CHALLENGE ###
             
@@ -168,9 +183,8 @@ class MyRob(CRobLinkAngs):
             # Drive motors with adjusted power
             self.driveMotors(left_power, right_power)
 
-            print(f"x: {coordinates[0]:.2f}, y: {coordinates[1]:.2f}")
-            print(f"theta: {degrees(theta):.2f}")
-            print(paths)
+            # print(f"x: {coordinates[0]:.2f}, y: {coordinates[1]:.2f}")
+            # print(f"theta: {degrees(theta):.2f}")
 
 class Map():
     def __init__(self, filename):

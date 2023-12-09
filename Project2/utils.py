@@ -80,14 +80,15 @@ def median_value(pattern, step = 1, base = 3, x = '1'):
         middle2 = ones_indices[n // 2]
         return (middle1 + middle2) / 2.0 * step
 
-def center_of_mass(pattern, step = 1, base = 3, x = '1'):
+def center_of_mass(pattern, step = 1, x = '1'):
+    base = get_base(len(pattern), step)
     total_ones = pattern.count(x)
     if total_ones == 0:
         return base
 
     center_of_mass = sum(i * step for i, bit in enumerate(pattern) if bit == x) / total_ones
 
-    return center_of_mass
+    return center_of_mass - base
 
 def get_base(pattern_length, step = 1):
     middle_index = pattern_length // 2
@@ -220,9 +221,8 @@ def gps_model(pos, out, theta):
 
     return (gps_x, gps_y)
 
-def fixate_coordinates(coordinates, theta, prev_target = (0, 0), target = (0, 0), k = 2, delta = 15):
+def fixate_coordinates(coordinates, theta, delta = 15):
     x, y = coordinates
-    old_x, old_y = prev_target
 
     delta = radians(delta)
     angle = theta
@@ -235,62 +235,29 @@ def fixate_coordinates(coordinates, theta, prev_target = (0, 0), target = (0, 0)
         x = find_closest_even(x)
         return (x, y)
     
-    if pi/4 - delta < angle < pi/4 + delta:
-        dist = sqrt(euclidian_distance(prev_target, coordinates))
-        return (old_x + dist, old_y + dist)
-    
-    if -3*pi/4 - delta < angle < -3*pi/4 + delta:
-        dist = sqrt(euclidian_distance(prev_target, coordinates))
-        return (old_x - dist, old_y - dist)
-    
-    if 3*pi/4 - delta < angle < 3*pi/4 + delta:
-        dist = sqrt(euclidian_distance(prev_target, coordinates))
-        return (old_x - dist, old_y + dist)
-    
-    if -pi/4 - delta < angle < -pi/4 + delta:
-        dist = sqrt(euclidian_distance(prev_target, coordinates))
-        return (old_x + dist, old_y - dist)
-
     return (x, y)
 
-def fixate_theta(angle, delta = 15):
+def fixate_theta(angle, delta=15):
     delta = radians(delta)
+    reference_angles = [0, pi, pi/2, -pi/2, pi/4, -3*pi/4, 3*pi/4, -pi/4]
 
-    if -delta < angle < delta:
-        return 0
-    
-    if pi - delta < angle < -pi + delta:
-        return pi
+    closest_angle = min(reference_angles, key=lambda x: abs(x - angle))
 
-    if (pi/2 - delta) < angle < (pi/2 + delta):
-        return pi/2
-        
-    if (-pi/2 - delta) < angle < (-pi/2 + delta):
-        return -pi/2
-
-    if (pi/4 - delta) < angle < (pi/4 + delta):
-        return pi/4
-    
-    if -3*pi/4 - delta < angle < -3*pi/4 + delta:
-        return -3*pi/4
-    
-    if 3*pi/4 - delta < angle < 3*pi/4 + delta:
-        return 3*pi/4
-    
-    if -pi/4 - delta < angle < -pi/4 + delta:
-        return -pi/4
+    if abs(angle - closest_angle) < delta:
+        return closest_angle
     
     return angle
 
-def find_closest_even(number):
-    rounded_number = round(number)
+def find_closest_even(n):
+    rounded = round(n)
+    
+    if rounded % 2 == 0:
+        return rounded
+    
+    if n < 0:
+        return rounded - 1 if abs(n - (rounded - 1)) < abs(n - (rounded + 1)) else rounded + 1
+    return rounded - 1 if abs(n - (rounded - 1)) < abs(n - (rounded + 1)) else rounded + 1
 
-    if rounded_number % 2 == 0:
-        return rounded_number
-
-    closest_even_number = rounded_number + 1 if rounded_number % 2 != 0 else rounded_number - 1
-
-    return closest_even_number
 
 def euclidian_distance(p1, p2):
     x1, y1 = p1
@@ -313,6 +280,8 @@ def find_paths(history):
         line = history[i]
         next_line = history[i + 1]
 
+        print(f"line: {line}")
+
         if "1" in line[2:5]:
             # history:
             # xx111xx  
@@ -326,13 +295,15 @@ def find_paths(history):
                 # history:
                 # 11xxxxx (line)
                 # 01111xx (next_line)
-                if line[0] == "0" and line[1] == "1" and "0" not in next_line[0:2]: 
+                if line[0] == "0" and line[1] == "1" and "0" not in next_line[1:3]: 
                     paths.append('sl')
 
                 # history:
                 # 11111xx (line)
                 if "0" not in line[2:5]:
                     hl += 1
+                    if next_line[0] == "0" and next_line[1] == "1":
+                        paths.append('lh')
 
             if "1" in line[5:]:
                 # history:
@@ -344,16 +315,18 @@ def find_paths(history):
                 # history:
                 # xxxxx11 (next_line)
                 # xx11110 (line)
-                if line[6] == "0" and line[5] == "1" and "0" not in next_line[5:]:
+                if line[6] == "0" and line[5] == "1" and "0" not in next_line[4:6]:
                     paths.append('sr')
 
                 # history:
                 # xx11111 (line)
                 if "0" not in line[2:5]:
                     hr += 1  
-    
-    # if history[-1][3] == "1":
-    #     paths.append('fwd')
+                    if next_line[5] == "1" and next_line[6] == "0":
+                        paths.append('rh')
+
+    if history[-1][3] == "1":
+        paths.append('fwd')
 
     if hl >= 2:
         paths.append('hl')
@@ -654,4 +627,26 @@ def on_spot_error(actual, target, compass):
 
     angle_difference = adjust_angle(angle_difference)
         
-    return 0.5 * angle_difference
+    return angle_difference
+
+def general_movement_model(left_power, right_power, out, theta, coordinates):
+    wpow = (left_power, right_power)
+    out = calculate_out(out, wpow)
+    theta += rotation_model(out)
+    theta = adjust_angle(theta)
+    coordinates = gps_model(coordinates, out, theta)
+
+    return coordinates, theta
+
+def centered_line(line, n_sensors):
+    n = len(line)
+
+    if n_sensors >= n:
+        return line
+    
+    start_index = (n - n_sensors) // 2
+    end_index = start_index + n_sensors
+
+    centered_elements = line[start_index:end_index]
+
+    return centered_elements
