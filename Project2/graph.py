@@ -1,5 +1,6 @@
 import heapq
 from collections import deque
+from itertools import permutations
 
 class Node:
     def __init__(self, x, y):
@@ -41,16 +42,39 @@ class Graph:
 
     def add_node(self, node):
         self.nodes.add(node)
+        if node not in self.edges:
+            self.edges[node] = []
+
+    def add_edges_from(self, edges):
+        for edge in edges:
+            if len(edge) == 3:
+                node1, node2, cost = edge
+                self.add_edge(node1, node2, cost)
+            else:
+                node1, node2 = edge
+                self.add_edge(node1, node2)
+    
+    def add_connections(self, node, nodes):
+        for n in nodes:
+            self.add_edge(node, n)
 
     def add_nodes_from(self, nodes):
-        self.nodes.update(nodes)
+        for node in nodes:
+            self.add_node(node)
 
-    def add_edge(self, node1, node2, cost):
-        self.edges.setdefault(node1, []).append((node2, cost))
-        self.edges.setdefault(node2, []).append((node1, cost))
+    def add_edge(self, node1, node2, cost=1):
+        self.add_node(node1)
+        self.add_node(node2)
+        self.edges[node1].append((node2, cost))
+        self.edges[node2].append((node1, cost))
 
     def add_beacon(self, number, node):
+        self.add_node(node)
         self.beacons.add((number, node))
+    
+    def set_visited(self, node):
+        self.add_node(node)
+        self.visited.add(node)
 
     def astar(self, start, goal):
         open_set = []   # Priority queue for nodes to be evaluated
@@ -88,28 +112,35 @@ class Graph:
 
         return None
 
-    def bfs_unknown(self, start):
-        goals = self.unknown_nodes()  # Set of unknown nodes
+    def tsp(self, start):
+        unknown_nodes = list(self.unknown_nodes())
+        if not unknown_nodes:
+            return 0, [start]
 
-        open_queue = deque([start])  # Queue for nodes to be evaluated
-        closed_set = set()  # Set of nodes already evaluated
-        came_from = {}  # Mapping of nodes to their predecessors
+        shortest_path_length = float('inf')
+        shortest_path = None
 
-        while open_queue:
-            current = open_queue.popleft()
+        for perm in permutations(unknown_nodes):
+            path = [start] + list(perm)
+            path_length = self.calculate_path_length(path)
 
-            if current in goals:
-                path = self.reconstruct_path(came_from, current)
-                return path, current  # Return the path and the closest goal
+            if path_length < shortest_path_length:
+                shortest_path_length = path_length
+                shortest_path = path
 
-            closed_set.add(current)
+        return shortest_path_length, shortest_path
 
-            for neighbor, _ in self.edges.get(current, []):
-                if neighbor not in closed_set and neighbor not in open_queue:
-                    came_from[neighbor] = current
-                    open_queue.append(neighbor)
+    def calculate_path_length(self, path):
+        length = 0
+        for i in range(len(path) - 1):
+            node1, node2 = path[i], path[i + 1]
+            edge = next((e for e in self.edges[node1] if e[0] == node2), None)
+            if edge:
+                length += edge[1]
+        return length
 
-        return None
+        min_path, min_cost = min(all_paths, key=lambda x: x[1])
+        return min_path, min_cost
 
     def heuristic(self, node, goal, method='euclidean'):
         if method == 'euclidean':

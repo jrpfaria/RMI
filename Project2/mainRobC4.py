@@ -46,10 +46,10 @@ class MyRob(CRobLinkAngs):
         theta = 0               # Angle
 
         # Initialize variables for mapping
-        freely_moving = False   # Flag to indicate if robot is just moving forward
         paths = []              # Paths
-        prev_target = (0,0)     # Previous target
-        target = (2,0)          # Target
+        prev_target = (0, 0)    # Previous target
+        target = (2, 0)         # Target
+        targets = [target]      # Targets
         history = []            # History of directions
         
         # Initialize variables for robot movement
@@ -69,20 +69,22 @@ class MyRob(CRobLinkAngs):
 
         g = Graph()
 
+        g.add_node(prev_target)
+        g.add_node(target)
+        g.set_visited(prev_target)
+
         if (self.measures.ground != -1):
             pmap[MAP_START_Y][MAP_START_X] = str(self.measures.ground)
             g.add_beacon(self.measures.ground, MAP_START)
 
+
         while True:
+            target = targets[0]
             self.readSensors()
 
             # Get the line and compass values
             line = self.measures.lineSensor
             compass = radians(self.measures.compass) # Converted to radians to normalize calculations
-
-            history.append(line)
-            if len(history) > 7:
-                history.pop(0)
 
             # Calculate the error
             if is_close(coordinates, target, 0.438):
@@ -91,7 +93,7 @@ class MyRob(CRobLinkAngs):
                 n_sensors = 3
             elif is_close(coordinates, target, 1.6):
                 Kp = 2
-                base_speed = 0.1
+                base_speed = 0.10
                 n_sensors = 3
             elif is_close(coordinates, target, 1.9):
                 Kp = 4
@@ -108,6 +110,10 @@ class MyRob(CRobLinkAngs):
             # Calculate the control output (PID)
             control = Kp * error
 
+            history.append(line)
+            if len(history) > 9:
+                history.pop(0)
+
             # Calculate motor powers
             left_power = base_speed + control
             right_power = base_speed - control
@@ -119,15 +125,16 @@ class MyRob(CRobLinkAngs):
             ### MOVEMENT MODEL ###
             coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
 
-            print(f"target: {target}")
-            print(f"prev_target: {prev_target}")
+            # print(f"target: {target}")
+            # print(f"prev_target: {prev_target}")
             
             ### MAPPING CHALLENGE ### 
             if is_close(coordinates, target, 0.2):
-                
+                print(f"x: {coordinates[0]:.2f}, y: {coordinates[1]:.2f}")
+
                 if (self.measures.ground != -1):
                     target_x, target_y = target
-                    pmap[target_y][target_x] = str(self.measures.ground)
+                    pmap[MAP_START_Y + target_y][MAP_START_X + target_x] = str(self.measures.ground)
                     g.add_beacon(self.measures.ground, target)
 
                 theta = fixate_theta(compass)
@@ -141,16 +148,27 @@ class MyRob(CRobLinkAngs):
 
                 write_map_to_file(pmap, FILENAME)
 
-                g.add_nodes_from(unknowns)
+                g.set_visited(target)
+                g.add_connections(target, unknowns)
+
                 ## g.add_edges_from
-                # check best unknown path    
+                # check best unknown path            
 
-                prev_target = target
+                all_unknowns = g.tsp(target)
+                print(f"all_unknowns: {all_unknowns}")
                 
-                target = next_target(unknowns)
+                new_target = next_target(unknowns, g)
 
-                if target is None or target in g.visited:
-                    target = prev_target
+                if new_target is None:
+                    #all_unknowns = g.bfs_unknown(target)
+                    #print(f"all_unknowns: {all_unknowns}")
+                    new_target = prev_target
+
+                targets.append(new_target)
+                
+                prev_target = targets.pop(0)
+
+                target = targets[0]
                 
                 # target = next_target(target, paths)
                 # atan2 : on_spot_error(coordinates, target, theta)

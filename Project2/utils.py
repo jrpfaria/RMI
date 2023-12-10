@@ -289,53 +289,71 @@ def find_paths(history):
                 # history:
                 # 01111xx (next_line)
                 # 10111xx (line)
-                if line[0] == next_line[1] == "1" and line[1] == next_line[0] == "0" and "0" not in line[2:5]:
+                if line[0] == next_line[1] == "1" and next_line[0] == "0" and "0" not in line[2:5]:
                     paths.append('lh')
                 
                 # history:
                 # 11xxxxx (line)
                 # 01111xx (next_line)
-                if line[0] == "0" and line[1] == "1" and "0" not in next_line[1:3]: 
+                if line[0] == "0" and line[1] == "1" and "0" not in next_line[1:4]: 
+                    paths.append('sl')
+                # history:
+                # x1x0xxx (next_line)
+                # 0xx1xxx (line)
+                if line[3] == next_line[1] == "1"  and next_line[0] == line[0] == "0":
                     paths.append('sl')
 
                 # history:
-                # 11111xx (line)
-                if "0" not in line[2:5]:
+                # 1111xxx (line)
+                if "0" not in line[0:3]:
                     hl += 1
-                    if next_line[0] == "0" and next_line[1] == "1":
-                        paths.append('lh')
+
+                # history:
+                # 011xxxx (next_line)
+                # 111xxxx (line)                     
+                if next_line[0] == "0" and line[0] == line[1] == next_line[1] == "1":
+                    paths.append('lh')
 
             if "1" in line[5:]:
                 # history:
                 # xx11110 (next_line)
                 # xx11101 (line)
-                if line[5] == next_line[4] == "1" and line[6] == next_line[5] == "0" and "0" not in line[2:5]:
+                if line[6] == next_line[5] == "1" and line[5] == "0" and "0" not in line[2:5]:
                     paths.append('rh')
                 
                 # history:
                 # xxxxx11 (next_line)
                 # xx11110 (line)
-                if line[6] == "0" and line[5] == "1" and "0" not in next_line[4:6]:
+                if line[6] == "0" and line[5] == "1" and "0" not in next_line[4:]:
+                    paths.append('sr')
+                # history:
+                # xxx0x1x (next_line)
+                # xxx1xx0 (line)
+                if line[3] == next_line[5] == "1"  and next_line[6] == line[6] == "0":
                     paths.append('sr')
 
                 # history:
-                # xx11111 (line)
-                if "0" not in line[2:5]:
+                # xxx1111 (line)
+                if "0" not in line[4:]:
                     hr += 1  
-                    if next_line[5] == "1" and next_line[6] == "0":
-                        paths.append('rh')
 
-    if history[-1][3] == "1":
+                # history:
+                # xxxx110 (next_line)
+                # xxxx111 (line)
+                if next_line[6] == "0" and line[5] == line[6] == next_line[5] == "1":
+                    paths.append('rh')
+
+    if history[-1][3] == "1" and (history[-1][2] == "1" or history[-1][4] == "1"):
         paths.append('fwd')
 
-    if hl >= 2:
+    if hl >= 3:
         paths.append('hl')
-    elif hl == 1 and 'lh' not in paths and 'sl' not in paths:
+    elif hl >= 2 and 'lh' not in paths and 'sl' not in paths:
         paths.append('hl')
 
-    if hr >= 2:
+    if hr >= 3:
         paths.append('hr')
-    elif hr == 1 and 'rh' not in paths and 'sr' not in paths:
+    elif hr >= 2 and 'rh' not in paths and 'sr' not in paths:
         paths.append('hr')
 
     return list(set(paths))
@@ -615,8 +633,9 @@ def update_map(paths, pmap, map_start, prev_target, target):
     write_map_to_file(pmap, "map.out")
     return pmap
 
-def next_target(unknowns):
-    return min(unknowns, key=lambda x: x[2])[:2] if unknowns else None
+def next_target(unknowns, graph):
+    unvisited_unknowns = [(x, y, cost) for x, y, cost in unknowns if (x, y) not in graph.visited]
+    return min(unvisited_unknowns, key=lambda x: x[2])[:2] if unvisited_unknowns else None
     
 def on_spot_error(actual, target, compass):
     x, y = actual
