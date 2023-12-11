@@ -89,7 +89,7 @@ class MyRob(CRobLinkAngs):
             # Calculate the error
             if is_close(coordinates, target, 0.438):
                 Kp = 0
-                base_speed = 0.06
+                base_speed = 0.1
                 n_sensors = 3
             elif is_close(coordinates, target, 1.6):
                 Kp = 2
@@ -110,7 +110,10 @@ class MyRob(CRobLinkAngs):
             # Calculate the control output (PID)
             control = Kp * error
 
-            history.append(line)
+            sensor_positions = calculate_sensor_positions(coordinates, theta)
+            history.append((line, sensor_positions))
+            
+            #history.append(line)
             if len(history) > 9:
                 history.pop(0)
 
@@ -140,7 +143,7 @@ class MyRob(CRobLinkAngs):
                 theta = fixate_theta(compass)
                 coordinates = fixate_coordinates(coordinates, theta)
                 
-                paths = find_paths(history)
+                paths = find_paths(history, target)
                 print(f"paths: {paths}")
                 
                 unknowns = get_paths(paths, prev_target, target)

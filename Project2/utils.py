@@ -258,6 +258,11 @@ def find_closest_even(n):
         return rounded - 1 if abs(n - (rounded - 1)) < abs(n - (rounded + 1)) else rounded + 1
     return rounded - 1 if abs(n - (rounded - 1)) < abs(n - (rounded + 1)) else rounded + 1
 
+def manhattan_distance(p1, p2):
+    x1, y1 = p1
+    x2, y2 = p2
+
+    return abs(x1 - x2) + abs(y1 - y2)
 
 def euclidian_distance(p1, p2):
     x1, y1 = p1
@@ -267,96 +272,6 @@ def euclidian_distance(p1, p2):
 
 def is_close(p1, p2, threshold = 0.5, distance = euclidian_distance):
     return distance(p1, p2) < threshold
-
-def find_paths(history):
-    # paths initialized with 'fwd' because we check
-    # if it doesn't exist over the course of the algorithm
-    paths = []
-    
-    hl = hr = 0
-
-    for i in range(len(history) - 1):
-        # aux variables to make the code more readable
-        line = history[i]
-        next_line = history[i + 1]
-
-        print(f"line: {line}")
-
-        if "1" in line[2:5]:
-            # history:
-            # xx111xx  
-            if "1" in line[0:2]:
-                # history:
-                # 01111xx (next_line)
-                # 10111xx (line)
-                if line[0] == next_line[1] == "1" and next_line[0] == "0" and "0" not in line[2:5]:
-                    paths.append('lh')
-                
-                # history:
-                # 11xxxxx (line)
-                # 01111xx (next_line)
-                if line[0] == "0" and line[1] == "1" and "0" not in next_line[1:4]: 
-                    paths.append('sl')
-                # history:
-                # x1x0xxx (next_line)
-                # 0xx1xxx (line)
-                if line[3] == next_line[1] == "1"  and next_line[0] == line[0] == "0":
-                    paths.append('sl')
-
-                # history:
-                # 1111xxx (line)
-                if "0" not in line[0:3]:
-                    hl += 1
-
-                # history:
-                # 011xxxx (next_line)
-                # 111xxxx (line)                     
-                if next_line[0] == "0" and line[0] == line[1] == next_line[1] == "1":
-                    paths.append('lh')
-
-            if "1" in line[5:]:
-                # history:
-                # xx11110 (next_line)
-                # xx11101 (line)
-                if line[6] == next_line[5] == "1" and line[5] == "0" and "0" not in line[2:5]:
-                    paths.append('rh')
-                
-                # history:
-                # xxxxx11 (next_line)
-                # xx11110 (line)
-                if line[6] == "0" and line[5] == "1" and "0" not in next_line[4:]:
-                    paths.append('sr')
-                # history:
-                # xxx0x1x (next_line)
-                # xxx1xx0 (line)
-                if line[3] == next_line[5] == "1"  and next_line[6] == line[6] == "0":
-                    paths.append('sr')
-
-                # history:
-                # xxx1111 (line)
-                if "0" not in line[4:]:
-                    hr += 1  
-
-                # history:
-                # xxxx110 (next_line)
-                # xxxx111 (line)
-                if next_line[6] == "0" and line[5] == line[6] == next_line[5] == "1":
-                    paths.append('rh')
-
-    if history[-1][3] == "1" and (history[-1][2] == "1" or history[-1][4] == "1"):
-        paths.append('fwd')
-
-    if hl >= 3:
-        paths.append('hl')
-    elif hl >= 2 and 'lh' not in paths and 'sl' not in paths:
-        paths.append('hl')
-
-    if hr >= 3:
-        paths.append('hr')
-    elif hr >= 2 and 'rh' not in paths and 'sr' not in paths:
-        paths.append('hr')
-
-    return list(set(paths))
 
 def get_paths(paths, prev_target, target):  
     unknowns = []
@@ -669,3 +584,124 @@ def centered_line(line, n_sensors):
     centered_elements = line[start_index:end_index]
 
     return centered_elements
+
+
+def find_paths(lineHistory, target):
+    paths = []
+    paths.extend(checkCenter(lineHistory[-1], target))
+    paths.extend(checkSides(lineHistory[0:-1], target, paths))
+    return list(set(paths))
+
+def checkSides(lineHistory, target, paths):
+    hl = hr = 0
+
+    aux = 0 if paths else 1
+
+    for i in range(len(lineHistory)-1):
+        line, positions = lineHistory[i]
+        next_line, next_positions = lineHistory[i+1]
+
+        # Consider sensor position
+        s0_dist = manhattan_distance(positions[0], target) - 0.24
+        s1_dist = manhattan_distance(positions[1], target) - 0.16 
+        s5_dist = manhattan_distance(positions[5], target) - 0.16
+        s6_dist = manhattan_distance(positions[6], target) - 0.24
+
+        ns0_dist = manhattan_distance(next_positions[0], target) - 0.24
+        ns1_dist = manhattan_distance(next_positions[1], target) - 0.16 
+        ns5_dist = manhattan_distance(next_positions[5], target) - 0.16
+        ns6_dist = manhattan_distance(next_positions[6], target) - 0.24
+
+        if '1' in line[2:5]:
+            if '1' in line[0:2]:
+                if '0' not in line[0:2]:
+                    if s0_dist <= 0.1 and s1_dist <= 0.1:
+                        hl += 1
+                    if next_line[0] == '0' and next_line[1] == '1':
+                        paths.append('lh')
+                if line[1] == '0' and line[0:2] != next_line[0:2] and '1' in next_line[0:2] and ns1_dist > 0.1 and '0' not in line [2:5]:
+                    paths.append('lh')
+
+            if '1' in line[5:]:
+                if '0' not in line[5:]:
+                    if s6_dist <= 0.1 and s5_dist <= 0.1:
+                        hr += 1
+                    if next_line[6] == '0' and next_line[5] == '1':
+                        paths.append('rh')
+                if line[5] == '0' and line[5:] != next_line[5:] and '1' in next_line[5:] and ns5_dist > 0.1 and '0' not in line [2:5]:
+                    paths.append('rh')
+
+    line = lineHistory[-1][0]
+    positions = lineHistory[-1][1]
+    s0_dist = manhattan_distance(positions[0], target) - 0.24
+    s1_dist = manhattan_distance(positions[1], target) - 0.16
+    s5_dist = manhattan_distance(positions[5], target) - 0.16
+    s6_dist = manhattan_distance(positions[6], target) - 0.24
+    
+    if line.count('1') == 4 and aux:
+        if '1' in line[0:2] and s0_dist > 0.1 and s1_dist > 0.1:
+            paths.append('sl')
+        if '1' in line[5:] and s6_dist > 0.1 and s5_dist > 0.1:
+            paths.append('sr')
+    
+    if hl > 1:
+        paths.append('hl')
+    elif hl == 1 and 'lh' not in paths and 'sl' not in paths:
+        paths.append('hl')
+
+    if hr > 1:
+        paths.append('hr')
+    elif hr == 1 and 'rh' not in paths and 'sr' not in paths:
+        paths.append('hr')
+
+    if paths == []:
+        if '0' not in line[2:-1]:
+            paths.append('hr')
+        if '0' not in line[0:5]:
+            paths.append('hl')
+
+    return paths
+    
+def checkCenter(lineHistory, target):
+    paths = []
+
+    line, position = lineHistory
+    
+    s0_dist = manhattan_distance(position[0], target) - 0.24
+    s1_dist = manhattan_distance(position[1], target) - 0.16
+    s3_dist = manhattan_distance(position[3], target)
+    s5_dist = manhattan_distance(position[5], target) - 0.16
+    s6_dist = manhattan_distance(position[6], target) - 0.24
+
+    if line[3] == '1' and s3_dist > 0.1:
+        paths.append('fwd')
+    
+    if '1' in line[0:1] and s0_dist > 0.1 and s1_dist > 0.1:
+        paths.append('sl')
+    if '1' in line[5:] and s5_dist > 0.1 and s6_dist > 0.1:
+        paths.append('sr')
+
+    return paths
+
+def calculate_sensor_positions(current_node, compass, sensor_distance=0.438, sensor_spacing=0.08):
+    x, y = current_node
+    middle_sensor_x = x + sensor_distance * cos(compass)
+    middle_sensor_y = y + sensor_distance * sin(compass)
+
+    right_sensor_positions = []
+    for i in range(1, 4):
+        angle = compass - 90
+        right_sensor_x = middle_sensor_x + i * sensor_spacing * cos(radians(angle))
+        right_sensor_y = middle_sensor_y + i * sensor_spacing * sin(radians(angle))
+        right_sensor_positions.append((right_sensor_x, right_sensor_y))
+
+    left_sensor_positions = []
+    for i in range(1, 4):
+        angle = compass + 90
+        left_sensor_x = middle_sensor_x + i * sensor_spacing * cos(radians(angle))
+        left_sensor_y = middle_sensor_y + i * sensor_spacing * sin(radians(angle))
+        left_sensor_positions.insert(0, (left_sensor_x, left_sensor_y))
+
+    all_sensor_positions = left_sensor_positions + [(middle_sensor_x, middle_sensor_y)] + right_sensor_positions
+
+    return all_sensor_positions
