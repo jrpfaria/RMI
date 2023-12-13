@@ -148,6 +148,7 @@ class MyRob(CRobLinkAngs):
                 paths = find_paths(history, target)
                 print(f"paths: {paths}")
                 
+                print(prev_target, target)
                 unknowns = get_paths(paths, prev_target, target)
 
                 old_ptarget = prev_target
@@ -168,7 +169,7 @@ class MyRob(CRobLinkAngs):
 
                 print(candidate_targets)
                 if not candidate_targets:
-                    new_path, _= g.bfs_unknown(prev_target)
+                    new_path, _= g.bfs_unknown(target)
                     targets.append(new_path[1:])
                     target = targets[0]
                 else:
