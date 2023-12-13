@@ -42,6 +42,7 @@ class MyRob(CRobLinkAngs):
 
         # Initialize variables for movement model
         coordinates = (0, 0)    # Coordinates
+        coordinates = Node(0,0)
         out = (0, 0)            # Step
         theta = 0               # Angle
 
@@ -127,6 +128,7 @@ class MyRob(CRobLinkAngs):
 
             ### MOVEMENT MODEL ###
             coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
+            coordinates = Node(coordinates[0], coordinates[1])
 
             # print(f"target: {target}")
             # print(f"prev_target: {prev_target}")
@@ -147,47 +149,65 @@ class MyRob(CRobLinkAngs):
                 print(f"paths: {paths}")
                 
                 unknowns = get_paths(paths, prev_target, target)
-                pmap = update_map(paths, pmap, MAP_START, prev_target, target)
 
-                write_map_to_file(pmap, FILENAME)
+                old_ptarget = prev_target
+                old_target = target
 
                 g.set_visited(target)
-                g.add_connections(target, unknowns)
 
                 ## g.add_edges_from
                 # check best unknown path            
 
-                all_unknowns = g.tsp(target)
-                print(f"all_unknowns: {all_unknowns}")
+                closest_unknown = g.bfs_unknown(target)
+                print(f"{closest_unknown=}")
                 
-                new_target = next_target(unknowns, g)
+                print(unknowns)
+                candidate_targets = [node for node in unknowns if node not in g.visited]
 
-                if new_target is None:
-                    #all_unknowns = g.bfs_unknown(target)
-                    #print(f"all_unknowns: {all_unknowns}")
-                    new_target = prev_target
-
-                targets.append(new_target)
-                
                 prev_target = targets.pop(0)
 
-                target = targets[0]
+                print(candidate_targets)
+                if not candidate_targets:
+                    new_path, _= g.bfs_unknown(prev_target)
+                    targets.append(new_path[1:])
+                    target = targets[0]
+                else:
+                    target = candidate_targets[0]
                 
                 # target = next_target(target, paths)
                 # atan2 : on_spot_error(coordinates, target, theta)
-
-                error = degrees(on_spot_error(coordinates, target, theta))
-
-                while (abs(error) > 15):
-                    # print(f"error: {error}")
-                    self.readSensors()
-                    error = max(min(error, 0.15), -0.15)
-                    left_power, right_power = (-error, error)
-                    coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
-                    out = (left_power, right_power)
-                    self.driveMotors(left_power, right_power)
-                    error = degrees(on_spot_error(coordinates, target, theta))
                 
+                while True:
+
+                    error = degrees(on_spot_error(coordinates, target, theta))
+
+                    while (abs(error) > 15):
+                        # print(f"error: {error}")
+                        self.readSensors()
+                        error = max(min(error, 0.15), -0.15)
+                        left_power, right_power = (-error, error)
+                        coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
+                        out = (left_power, right_power)
+                        self.driveMotors(left_power, right_power)
+                        error = degrees(on_spot_error(coordinates, target, theta))
+                    
+                    self.readSensors()
+                    line = self.measures.lineSensor
+                    print("rotating line", line)
+                    if line_exists(line, compass, coordinates, target):
+                        if not candidate_targets:
+                            target = prev_target
+                            break
+                        target = candidate_targets.pop(0)
+                        paths.pop(0)
+                    else:
+                        break
+
+                targets.append(target)
+                g.add_connections(prev_target, candidate_targets)
+
+                pmap = update_map(paths, pmap, MAP_START, old_ptarget, old_target)
+                write_map_to_file(pmap, FILENAME)
                 # go forward a bit
 
 

@@ -110,37 +110,31 @@ class Graph:
                     if neighbor not in open_set:
                         heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
+        return None, None
+
+
+    def bfs_unknown(self, start):
+        goals = self.unknown_nodes()  # Set of unknown nodes
+
+        open_queue = deque([start])  # Queue for nodes to be evaluated
+        closed_set = set()  # Set of nodes already evaluated
+        came_from = {}  # Mapping of nodes to their predecessors
+
+        while open_queue:
+            current = open_queue.popleft()
+
+            if current in goals:
+                path = self.reconstruct_path(came_from, current)
+                return path, current  # Return the path and the closest goal
+
+            closed_set.add(current)
+
+            for neighbor, _ in self.edges.get(current, []):
+                if neighbor not in closed_set and neighbor not in open_queue:
+                    came_from[neighbor] = current
+                    open_queue.append(neighbor)
+
         return None
-
-    def tsp(self, start):
-        unknown_nodes = list(self.unknown_nodes())
-        if not unknown_nodes:
-            return 0, [start]
-
-        shortest_path_length = float('inf')
-        shortest_path = None
-
-        for perm in permutations(unknown_nodes):
-            path = [start] + list(perm)
-            path_length = self.calculate_path_length(path)
-
-            if path_length < shortest_path_length:
-                shortest_path_length = path_length
-                shortest_path = path
-
-        return shortest_path_length, shortest_path
-
-    def calculate_path_length(self, path):
-        length = 0
-        for i in range(len(path) - 1):
-            node1, node2 = path[i], path[i + 1]
-            edge = next((e for e in self.edges[node1] if e[0] == node2), None)
-            if edge:
-                length += edge[1]
-        return length
-
-        min_path, min_cost = min(all_paths, key=lambda x: x[1])
-        return min_path, min_cost
 
     def heuristic(self, node, goal, method='euclidean'):
         if method == 'euclidean':
