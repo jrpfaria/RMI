@@ -1,5 +1,5 @@
-import math
 import sys
+from collections import deque
 from croblink import *
 from math import *
 import xml.etree.ElementTree as ET
@@ -42,16 +42,15 @@ class MyRob(CRobLinkAngs):
 
         # Initialize variables for movement model
         coordinates = (0, 0)    # Coordinates
-        coordinates = Node(0,0)
         out = (0, 0)            # Step
         theta = 0               # Angle
 
         # Initialize variables for mapping
-        paths = []              # Paths
-        prev_target = (0, 0)    # Previous target
-        target = (2, 0)         # Target
-        targets = [target]      # Targets
-        history = []            # History of directions
+        paths = []                              # Paths
+        prev_target = (0, 0)                    # Previous target
+        target = (2, 0)                         # Target
+        HISTORY_SIZE = 9                        # History size
+        history = deque(maxlen=HISTORY_SIZE)    # History of sensor values
         
         # Initialize variables for robot movement
         left_power = 0          # Left motor power
@@ -71,56 +70,80 @@ class MyRob(CRobLinkAngs):
         g = Graph()
 
         g.add_node(prev_target)
-        g.add_node(target)
         g.set_visited(prev_target)
 
+        self.readSensors()
         if (self.measures.ground != -1):
             pmap[MAP_START_Y][MAP_START_X] = str(self.measures.ground)
             g.add_beacon(self.measures.ground, MAP_START)
 
+        while True:
+            self.readSensors()
+            line = self.measures.lineSensor
+            compass = self.measures.compass
+            
+            pmap, paths = update_map_start(line, compass, pmap, MAP_START, paths)
+            if  -20 < compass < -4: break
+
+            if abs(compass) % 45 < 15:
+                self.driveMotors(-0.5, 0.5)
+            else:
+                self.driveMotors(-0.15, 0.15)
+    
+        if paths:
+            g.add_connections(prev_target, paths)
+
+            lx, ly = paths[0]
+            target = (lx, ly)
+        
+        else:
+            print("no paths?")
 
         while True:
-            target = targets[0]
             self.readSensors()
 
             # Get the line and compass values
             line = self.measures.lineSensor
             compass = radians(self.measures.compass) # Converted to radians to normalize calculations
 
-            # Calculate the error
+            # Calculate the control constants
             if is_close(coordinates, target, 0.438):
-                Kp = 0
+                cm_Kp = 0
+                ad_Kp = 0
                 base_speed = 0.1
                 n_sensors = 3
             elif is_close(coordinates, target, 1.6):
-                Kp = 2
+                cm_Kp = 2
+                ad_Kp = 0
                 base_speed = 0.10
                 n_sensors = 3
             elif is_close(coordinates, target, 1.9):
-                Kp = 4
+                cm_Kp = 4
+                ad_Kp = 0
                 base_speed = 0.15
                 n_sensors = 7
             else:
-                Kp = 5
+                cm_Kp = 5
+                ad_Kp = 0
                 base_speed = 0.15
                 n_sensors = 3
 
+            # Calculate the error
             evaluated_line = centered_line(line, n_sensors)
-            error = center_of_mass(evaluated_line, STEP)
+            cm_error = cm_Kp * center_of_mass(evaluated_line, STEP)
+            ad_error = ad_Kp * angular_deviation(coordinates, target, theta if theta % (pi / 4) == 0 else compass)
 
             # Calculate the control output (PID)
-            control = Kp * error
+            control = cm_error + ad_error
 
-            sensor_positions = calculate_sensor_positions(coordinates, theta)
+            # Calculate the sensor positions
+            sensor_positions = calculate_sensor_positions(coordinates, theta, compass)
+
+            # Add the sensor values to the history
             history.append((line, sensor_positions))
-            
-            #history.append(line)
-            if len(history) > 9:
-                history.pop(0)
 
             # Calculate motor powers
-            left_power = base_speed + control
-            right_power = base_speed - control
+            left_power, right_power = base_speed + control, base_speed - control
 
             # Ensure motor powers are within the valid range (-0.15 to 0.15)
             left_power = min(max(left_power, -0.15), +0.15)
@@ -128,84 +151,147 @@ class MyRob(CRobLinkAngs):
 
             ### MOVEMENT MODEL ###
             coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
-            coordinates = Node(coordinates[0], coordinates[1])
-
-            # print(f"target: {target}")
-            # print(f"prev_target: {prev_target}")
             
             ### MAPPING CHALLENGE ### 
             if is_close(coordinates, target, 0.2):
                 print(f"x: {coordinates[0]:.2f}, y: {coordinates[1]:.2f}")
-
-                if (self.measures.ground != -1):
-                    target_x, target_y = target
-                    pmap[MAP_START_Y + target_y][MAP_START_X + target_x] = str(self.measures.ground)
-                    g.add_beacon(self.measures.ground, target)
-
-                theta = fixate_theta(compass)
-                coordinates = fixate_coordinates(coordinates, theta)
+                print(f"theta: {degrees(theta):.2f}")
+                print(f"target: {target}")
+                print(f"prev_target: {prev_target}")
                 
-                paths = find_paths(history, target)
-                print(f"paths: {paths}")
-                
-                print(prev_target, target)
-                unknowns = get_paths(paths, prev_target, target)
-
+                # Keep track of the previous pointers
                 old_ptarget = prev_target
                 old_target = target
 
-                g.set_visited(target)
+                # Set the current position as visited
+                g.set_visited(old_target)
 
-                ## g.add_edges_from
-                # check best unknown path            
+                # Fixate coordinates with respect to axis of movement
+                theta = fixate_theta(compass)
+                coordinates = fixate_coordinates(coordinates, theta)
 
-                closest_unknown = g.bfs_unknown(target)
-                print(f"{closest_unknown=}")
+                # If target is a beacon, mark it as a beacon
+                if (self.measures.ground != -1):
+                    old_target_x, old_target_y = old_target
+                    pmap[MAP_START_Y - old_target_y][MAP_START_X + old_target_x] = str(self.measures.ground)
+                    g.add_beacon(self.measures.ground, old_target)
                 
-                print(unknowns)
-                candidate_targets = [node for node in unknowns if node not in g.visited]
+                # Scan the surrounding area for paths
+                paths = scan_paths(list(history), old_target)
+                paths = sort_paths(paths)
 
-                prev_target = targets.pop(0)
+                print(f"paths: {paths}")
 
-                print(candidate_targets)
+                translated_paths = translate_paths(paths, old_ptarget, old_target)
+          
+                # Candidate targets are the paths found that have not been visited
+                candidate_targets = [path for path in translated_paths if path not in g.visited]
+
+                # Set the previous target as the current target
+                prev_target = old_target
+
+                # If there are no candidate targets, add path to closest unknown node to targets buffer
                 if not candidate_targets:
-                    new_path, _= g.bfs_unknown(target)
-                    targets.append(new_path[1:])
-                    target = targets[0]
-                else:
-                    target = candidate_targets[0]
-                
-                # target = next_target(target, paths)
-                # atan2 : on_spot_error(coordinates, target, theta)
-                
-                while True:
+                    path, _ = g.bfs_unknowns(old_target)
 
-                    error = degrees(on_spot_error(coordinates, target, theta))
-
-                    while (abs(error) > 15):
-                        # print(f"error: {error}")
-                        self.readSensors()
-                        error = max(min(error, 0.15), -0.15)
-                        left_power, right_power = (-error, error)
-                        coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
-                        out = (left_power, right_power)
-                        self.driveMotors(left_power, right_power)
-                        error = degrees(on_spot_error(coordinates, target, theta))
-                    
-                    self.readSensors()
-                    line = self.measures.lineSensor
-                    print("rotating line", line)
-                    if line_exists(line, compass, coordinates, target):
-                        if not candidate_targets:
-                            target = prev_target
-                            break
-                        target = candidate_targets.pop(0)
-                        paths.pop(0)
-                    else:
+                    if path is None:
+                        # write path to beacons to file
+                        # write map to file
+                        self.finish()
                         break
 
-                targets.append(target)
-                g.add_connections(prev_target, candidate_targets)
+                    path = path[1:]
+                    print(f"bfs path: {path}")
+                    target = path.pop(0)
+
+                    while abs(error := angular_deviation(coordinates, target, theta)) > pi / 15:
+                        self.readSensors()
+                        error = max(min(error, 0.15), -0.15)
+                        left_power, right_power = -error, error
+
+                        coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
+                        out = (left_power, right_power)
+                        self.driveMotors(*out)
+                    
+                    while path:
+                        self.readSensors()
+                        line = self.measures.lineSensor
+
+                        if is_close(coordinates, target, 0.438):
+                            cm_Kp = 0
+                            ad_Kp = 0
+                            base_speed = 0.1
+                            n_sensors = 3
+                        elif is_close(coordinates, target, 1.6):
+                            cm_Kp = 2
+                            ad_Kp = 0
+                            base_speed = 0.10
+                            n_sensors = 3
+                        elif is_close(coordinates, target, 1.9):
+                            cm_Kp = 4
+                            ad_Kp = 0
+                            base_speed = 0.15
+                            n_sensors = 7
+                        else:
+                            cm_Kp = 5
+                            ad_Kp = 0
+                            base_speed = 0.15
+                            n_sensors = 3
+
+                        # Calculate the error
+                        evaluated_line = centered_line(line, n_sensors)
+                        cm_error = cm_Kp * center_of_mass(evaluated_line, STEP)
+                        ad_error = ad_Kp * angular_deviation(coordinates, target, theta if theta % (pi / 4) == 0 else compass)
+
+                        print(f"theta: {degrees(theta):.2f}")
+
+                        # Calculate the control output (PID)
+                        control = cm_error + ad_error
+
+                        # Calculate motor powers
+                        left_power, right_power = base_speed + control, base_speed - control
+
+                        # Ensure motor powers are within the valid range (-0.15 to 0.15)
+                        left_power = min(max(left_power, -0.15), +0.15)
+                        right_power = min(max(right_power, -0.15), +0.15)
+
+                        ### MOVEMENT MODEL ###
+                        coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
+
+                        if is_close(coordinates, target, 0.2):
+                            prev_target = target
+                            target = path.pop(0) 
+
+                            while abs(error := angular_deviation(coordinates, target, theta)) > pi / 15:
+                                self.readSensors()
+                                error = max(min(error, 0.15), -0.15)
+                                left_power, right_power = -error, error
+
+                                coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
+                                out = (left_power, right_power)
+                                self.driveMotors(*out)
+
+                        out = (left_power, right_power)
+                        self.driveMotors(*out)    
+                    continue
+                        
+                target = candidate_targets.pop(0)
+
+                # if is_far(coordinates, target, 3):
+                #     target = help_robot(coordinates, compass)
+
+                while abs(error := angular_deviation(coordinates, target, theta)) > pi / 15:
+                    self.readSensors()
+                    error = max(min(error, 0.15), -0.15)
+                    left_power, right_power = -error, error
+
+                    coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
+                    out = (left_power, right_power)
+                    self.driveMotors(*out)
+                    
+                g.add_connections(old_target, candidate_targets + [target])
+
+                print(f"target: {target}")
 
                 pmap = update_map(paths, pmap, MAP_START, old_ptarget, old_target)
                 write_map_to_file(pmap, FILENAME)
@@ -213,7 +299,7 @@ class MyRob(CRobLinkAngs):
 
 
             # Fixate coordinates with respect to axis of movement
-            if error == 0 or "1" == line[0] or "1" == line[6]:
+            if (cm_error == 0 and ad_error == 0) or "1" == line[0] or "1" == line[6]:
                 theta = fixate_theta(compass)
                 coordinates = fixate_coordinates(coordinates, theta)
 
@@ -223,7 +309,7 @@ class MyRob(CRobLinkAngs):
             ## END MOVEMENT MODEL
 
             # Drive motors with adjusted power
-            self.driveMotors(left_power, right_power)
+            self.driveMotors(*out)
 
             # print(f"x: {coordinates[0]:.2f}, y: {coordinates[1]:.2f}")
             # print(f"theta: {degrees(theta):.2f}")

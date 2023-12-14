@@ -1,5 +1,5 @@
 import math
-from math import cos, sin, pi, degrees, radians, sqrt, atan2
+from math import cos, sin, pi, degrees, radians, sqrt, atan2, floor
 
 PATTERNS = [
     [1, 0, 0, 0, 0, 0, 0],
@@ -89,6 +89,17 @@ def center_of_mass(pattern, step = 1, x = '1'):
     center_of_mass = sum(i * step for i, bit in enumerate(pattern) if bit == x) / total_ones
 
     return center_of_mass - base
+
+def angular_deviation(actual, target, compass):
+    x, y = actual
+    tx, ty = target
+
+    angle_to_target = atan2(ty - y, tx - x)
+    angle_difference = angle_to_target - compass
+
+    angle_difference = adjust_angle(angle_difference)
+        
+    return angle_difference
 
 def get_base(pattern_length, step = 1):
     middle_index = pattern_length // 2
@@ -273,7 +284,15 @@ def euclidian_distance(p1, p2):
 def is_close(p1, p2, threshold = 0.5, distance = euclidian_distance):
     return distance(p1, p2) < threshold
 
-def get_paths(paths, prev_target, target):  
+def is_far(p1, p2, threshold = 0.5, distance = euclidian_distance):
+    return distance(p1, p2) > threshold
+
+def sort_paths(paths):
+    order = {'fwd': 0, 'sl': 1, 'sr': 2, 'hl': 3, 'hr': 4, 'lh': 5, 'rh': 6}
+    return sorted(paths, key=lambda x: order[x])
+
+
+def translate_paths(paths, prev_target, target):  
     unknowns = []
     x, y = target
     px, py = prev_target
@@ -545,19 +564,7 @@ def update_map(paths, pmap, map_start, prev_target, target):
         elif dx < 0 and dy < 0:
             pmap[cy][cx + 1] = "-"
 
-    write_map_to_file(pmap, "map.out")
     return pmap
-    
-def on_spot_error(actual, target, compass):
-    x, y = actual
-    target_x, target_y = target
-
-    angle_to_target = atan2(target_y - y, target_x - x)
-    angle_difference = angle_to_target - compass
-
-    angle_difference = adjust_angle(angle_difference)
-        
-    return angle_difference
 
 def general_movement_model(left_power, right_power, out, theta, coordinates):
     wpow = (left_power, right_power)
@@ -582,13 +589,13 @@ def centered_line(line, n_sensors):
     return centered_elements
 
 
-def find_paths(lineHistory, target):
+def scan_paths(lineHistory, target):
     paths = []
-    paths.extend(checkCenter(lineHistory[-1], target))
-    paths.extend(checkSides(lineHistory[0:-1], target, paths))
-    return list(set(paths))
+    paths.extend(scan_center(lineHistory[-1], target))
+    paths.extend(scan_sides(lineHistory[0:-1], target, paths))
+    return set(paths)
 
-def checkSides(lineHistory, target, paths):
+def scan_sides(lineHistory, target, paths):
     hl = hr = 0
 
     aux = 0 if paths else 1
@@ -658,7 +665,7 @@ def checkSides(lineHistory, target, paths):
 
     return paths
     
-def checkCenter(lineHistory, target):
+def scan_center(lineHistory, target):
     paths = []
 
     line, position = lineHistory
@@ -679,8 +686,11 @@ def checkCenter(lineHistory, target):
 
     return paths
 
-def calculate_sensor_positions(current_node, compass, sensor_distance=0.438, sensor_spacing=0.08):
+def calculate_sensor_positions(current_node, theta, compass, sensor_distance=0.438, sensor_spacing=0.08):
     x, y = current_node
+    
+    compass = theta if degrees(theta) % 45 == 0 else compass
+
     middle_sensor_x = x + sensor_distance * cos(compass)
     middle_sensor_y = y + sensor_distance * sin(compass)
 
@@ -702,39 +712,66 @@ def calculate_sensor_positions(current_node, compass, sensor_distance=0.438, sen
 
     return all_sensor_positions
 
-def line_exists(line, compass, coordinates, target, delta = 30):
+def help_robot(coordinates, compass, delta=15):
     x, y = coordinates
-    tx, ty = target
-    side = side_with_ones(line)
-
     delta = radians(delta)
 
-    if "0" not in line[2:5]:
-        return True
+    x = floor(x)
+    y = floor(y)
 
-    angle = atan2(ty - y, tx - x)
-    angle_difference = angle - compass
+    if -delta < compass < delta:
+        return (find_closest_even(x+1.1), find_closest_even(y))
+    
+    if -pi + delta < compass < pi - delta:
+        return (find_closest_even(x-1.1), find_closest_even(y))
+    
+    if pi/2 - delta < compass < pi/2 + delta:
+        return (find_closest_even(x), find_closest_even(y+1.1))
+    
+    if -pi/2 - delta < compass < -pi/2 + delta:
+        return (find_closest_even(x), find_closest_even(y-1.1))
 
-    if angle_difference == 0:
-        return True
+    if pi/4 - delta < compass < pi/4 + delta:
+        return (find_closest_even(x+1.1), find_closest_even(y+1.1))
     
-    if angle_difference < 0 and side == "left":
-        return True
+    if -3*pi/4 - delta < compass < -3*pi/4 + delta:
+        return (find_closest_even(x-1.1), find_closest_even(y-1.1))
     
-    if angle_difference > 0 and side == "right":
-        return True
+    if 3*pi/4 - delta < compass < 3*pi/4 + delta:
+        return (find_closest_even(x-1.1), find_closest_even(y+1.1))
     
-    return False
+    if -pi/4 - delta < compass < -pi/4 + delta:
+        return (find_closest_even(x+1.1), find_closest_even(y-1.1))
 
-def side_with_ones(line):
-    left = 0
-    right = 0
-    
-    left = sum(x == '1' for x in line[0:4])
-    right = sum(x == '1' for x in line[3:])
+    return (0, 0)
 
-    if left > right:
-        return "left"
-    elif right > left:
-        return "right"
-    return "center"
+def update_map_start(line, compass, pmap, map_start, paths):
+    mx, my = map_start
+
+    if '1' in line[2:5]:
+        if -10 < compass < 10:
+            pmap[my][mx + 1] = "-"
+            paths.append((2, 0))
+        elif 35 < compass < 55:                    
+            pmap[my - 1][mx + 1] = "/"
+            paths.append((2, 2))
+        elif 80 < compass < 100:
+            pmap[my - 1][mx] = "|"
+            paths.append((0, 2))
+        elif 125 < compass < 145: 
+            pmap[my - 1][mx - 1] = "\\"
+            paths.append((-2, -2))
+        elif 170 < compass < 180 or -180 < compass < -170:
+            pmap[my][mx - 1] = "-"
+            paths.append((-2, 0))
+        elif -145 < compass < -125:
+            pmap[my + 1][mx - 1] = "/"
+            paths.append((-2, -2))
+        elif -100 < compass < -80:
+            pmap[my + 1][mx] = "|"
+            paths.append((0, -2))
+        elif -55 < compass < -35:
+            pmap[my + 1][mx + 1] = "\\" 
+            paths.append((2, -2)) 
+
+    return (pmap, paths)

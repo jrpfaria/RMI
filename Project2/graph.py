@@ -1,35 +1,6 @@
 import heapq
 from collections import deque
-from itertools import permutations
 
-class Node:
-    def __init__(self, x, y):
-        self.coordinates = (x, y)
-
-    def __iter__(self):
-        return iter(self.coordinates)
-
-    def __cmp__(self, other):
-        return isinstance(other, Node) and self.coordinates == other.coordinates
-
-    def __eq__(self, other):
-        return isinstance(other, Node) and self.coordinates == other.coordinates
-
-    def __hash__(self):
-        return hash(self.coordinates)
-
-    def __lt__(self, other):
-        return isinstance(other, Node) and self.coordinates < other.coordinates
-
-    def __str__(self):
-        return str(self.coordinates)
-
-    def __repr__(self):
-        return str(self)
-
-    def __getitem__(self, item):
-        return self.coordinates[item]
-    
 class Graph:
     def __init__(self):
         self.nodes = set()
@@ -92,7 +63,7 @@ class Graph:
 
             if current == goal:
                 path = self.reconstruct_path(came_from, current)
-                return path
+                return path, current
 
             closed_set.add(current)
 
@@ -113,8 +84,14 @@ class Graph:
         return None, None
 
 
-    def bfs_unknown(self, start):
+    def bfs_unknowns(self, start):
         goals = self.unknown_nodes()  # Set of unknown nodes
+
+        if not goals:
+            return None, None
+        
+        if start in goals:
+            return [start], start
 
         open_queue = deque([start])  # Queue for nodes to be evaluated
         closed_set = set()  # Set of nodes already evaluated
@@ -134,7 +111,7 @@ class Graph:
                     came_from[neighbor] = current
                     open_queue.append(neighbor)
 
-        return None
+        return None, None
 
     def heuristic(self, node, goal, method='euclidean'):
         if method == 'euclidean':
