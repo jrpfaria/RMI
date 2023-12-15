@@ -63,6 +63,16 @@ def adjust_power(last_left_power, last_right_power, left_power, right_power):
 
     return adjusted_left_power, adjusted_right_power
 
+def get_beacon_path_string(path):
+    return "\n".join([f"{str(node_x)} {str(node_y)}" for node_x, node_y in path])
+
+def print_beacon_path(path):
+    print(get_beacon_path_string(path))
+
+def write_beacon_path_to_file(path, output = "plan.out"):
+    with open(output, "w") as file:
+        file.write(get_beacon_path_string(path))
+
 def median_value(pattern, step = 1, base = 3, x = '1'):
     ones_indices = [i for i, bit in enumerate(pattern[1:6]) if bit == x]
 
@@ -591,6 +601,8 @@ def centered_line(line, n_sensors):
 
 def scan_paths(lineHistory, target):
     paths = []
+    for line, _ in lineHistory:
+        print(line)
     paths.extend(scan_center(lineHistory[-1], target))
     paths.extend(scan_sides(lineHistory[0:-1], target, paths))
     return set(paths)
@@ -669,20 +681,25 @@ def scan_center(lineHistory, target):
     paths = []
 
     line, position = lineHistory
-    
+
     s0_dist = manhattan_distance(position[0], target) - 0.24
     s1_dist = manhattan_distance(position[1], target) - 0.16
+    s2_dist = manhattan_distance(position[2], target) - 0.08
     s3_dist = manhattan_distance(position[3], target)
+    s4_dist = manhattan_distance(position[4], target) - 0.08
     s5_dist = manhattan_distance(position[5], target) - 0.16
     s6_dist = manhattan_distance(position[6], target) - 0.24
-
-    if line[3] == '1' and s3_dist > 0.1:
-        paths.append('fwd')
     
     if '1' in line[0:1] and s0_dist > 0.1 and s1_dist > 0.1:
         paths.append('sl')
     if '1' in line[5:] and s5_dist > 0.1 and s6_dist > 0.1:
         paths.append('sr')
+
+    if '1' in line[2:5] and s3_dist > 0.1 and 'sl' not in paths and 'sr' not in paths:
+        paths.append('fwd')
+
+    if line[3] == "1" and (round(s3_dist, 2) == round(s4_dist, 2) or round(s3_dist, 2) == round(s2_dist, 2)):
+        paths.append('fwd')
 
     return paths
 
@@ -775,3 +792,43 @@ def update_map_start(line, compass, pmap, map_start, paths):
             paths.append((2, -2)) 
 
     return (pmap, paths)
+
+def calculate_control_constants(coordinates, target, MAX_SPEED):
+    if is_close(coordinates, target, 0.3):
+        cm_Kp = 0
+        ad_Kp = 0
+        base_speed = 0.10
+        n_sensors = 3
+    elif is_close(coordinates, target, 1.6):
+        cm_Kp = 1
+        ad_Kp = 0
+        base_speed = 0.10
+        n_sensors = 3
+    elif is_close(coordinates, target, 1.9):
+        cm_Kp = 4
+        ad_Kp = 0
+        base_speed = MAX_SPEED
+        n_sensors = 7
+    else:
+        cm_Kp = 0
+        ad_Kp = -3
+        base_speed = MAX_SPEED
+        n_sensors = 3
+
+    return cm_Kp, ad_Kp, base_speed, n_sensors
+
+def calculate_control(line, n_sensors, coordinates, target, compass, cm_Kp, ad_Kp, STEP):
+    evaluated_line = centered_line(line, n_sensors)
+    cm_error = cm_Kp * center_of_mass(evaluated_line, STEP)
+    ad_error = ad_Kp * angular_deviation(coordinates, target, compass)
+    return cm_error + ad_error, cm_error, ad_error
+
+def calculate_rotation_error(error, compass, ROTATION_SPEED, ROTATION_SLOWDOWN_THRESHOLD, MAX_SPEED):                                    
+    if compass % 45 < ROTATION_SLOWDOWN_THRESHOLD:
+        return max(min(error, ROTATION_SPEED), -ROTATION_SPEED)
+    return max(min(error, MAX_SPEED), -MAX_SPEED)
+
+def cap_speed(left_power, right_power, MAX_SPEED):
+    left_power = min(max(left_power, -MAX_SPEED), MAX_SPEED)
+    right_power = min(max(right_power, -MAX_SPEED), MAX_SPEED)
+    return left_power, right_power

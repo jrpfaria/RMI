@@ -7,9 +7,26 @@ class Graph:
         self.visited = set()
         self.edges = {}
         self.beacons = set()
+        self.beacon_count = 0
+        self.start = None
+
+    def set_start(self, start):
+        self.start = start
+
+    def set_beacon_count(self, count):
+        self.beacon_count = count
 
     def unknown_nodes(self):
         return self.nodes.difference(self.visited)
+
+    def beacon_edges(self):
+        beacons = sorted(self.beacons, key=lambda x: x[0])
+
+        beacon_edges = [] 
+        for i in range(len(beacons) - 1):
+            beacon_edges.append((beacons[i][1], beacons[i + 1][1]))
+
+        return beacon_edges
 
     def add_node(self, node):
         self.nodes.add(node)
@@ -84,6 +101,28 @@ class Graph:
         return None, None
 
 
+    def astar_beacons(self):
+        start = self.start
+        beacon_edges = self.beacon_edges()
+
+        total_path = []
+        for edge in beacon_edges:
+            path, _ = self.astar(edge[0], edge[1])
+            if path:
+                total_path += path[:-1]
+
+        if not total_path:
+            return total_path, None
+            
+        path, goal = self.astar(total_path[-1], start)
+
+        if path:
+            total_path += path
+        
+        return total_path, goal
+            
+
+
     def bfs_unknowns(self, start):
         goals = self.unknown_nodes()  # Set of unknown nodes
 
@@ -115,9 +154,9 @@ class Graph:
 
     def heuristic(self, node, goal, method='euclidean'):
         if method == 'euclidean':
-            return ((node.coordinates[0] - goal.coordinates[0]) ** 2 + (node.coordinates[1] - goal.coordinates[1]) ** 2) ** 0.5
+            return ((node[0] - goal[0]) ** 2 + (node[1] - goal[1]) ** 2) ** 0.5
         if method == 'manhattan':
-            return abs(node.coordinates[0] - goal.coordinates[0]) + abs(node.coordinates[1] - goal.coordinates[1])
+            return abs(node[0] - goal[0]) + abs(node[1] - goal[1])
 
     def reconstruct_path(self, came_from, current):
         path = [current]
