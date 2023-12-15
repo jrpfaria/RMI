@@ -378,12 +378,9 @@ def translate_paths(paths, prev_target, target):
 
     translations = {}
     for path in paths:
-        if path == 'fwd':
-            translations[path] = direction_offsets[path]
-            unknowns.append(direction_offsets[path])
-        else:
-            translations[path] = direction_offsets[path][angle]
-            unknowns.append(direction_offsets[path][angle])        
+        offset = direction_offsets[path] if path == 'fwd' else direction_offsets[path][angle] 
+        translations[offset] = path
+        unknowns.append(offset)
 
     return unknowns, translations
 
@@ -506,10 +503,7 @@ def scan_center(lineHistory, target):
     if '1' in line[5:] and s5_dist > 0.1 and s6_dist > 0.1:
         paths.append('sr')
 
-    if '1' in line[2:5] and s3_dist > 0.1 and 'sl' not in paths and 'sr' not in paths:
-        paths.append('fwd')
-
-    if line[3] == "1" and (round(s3_dist, 2) == round(s4_dist, 2) or round(s3_dist, 2) == round(s2_dist, 2)):
+    if line[3]=="1" and s3_dist > 0.11:
         paths.append('fwd')
 
     return paths
@@ -746,3 +740,27 @@ def update_map(paths, pmap, map_start, prev_target, target):
         updated[path] = (y, x)
         
     return pmap, updated
+
+def correct_target(coordinates, compass, delta=15):
+    x, y = coordinates
+    delta = radians(delta)
+
+    if -delta < compass < delta:
+        return (x + 2, y)
+    if -pi + delta < compass < pi - delta:
+        return (x - 2, y)
+    if pi/2 - delta < compass < pi/2 + delta:
+        return (x, y + 2)
+    if -pi/2 - delta < compass < -pi/2 + delta:
+        return (x, y - 2)
+    if pi/4 - delta < compass < pi/4 + delta:
+        return (x + 2, y + 2)
+    if -3*pi/4 - delta < compass < -3*pi/4 + delta:
+        return (x - 2, y - 2)
+    if 3*pi/4 - delta < compass < 3*pi/4 + delta:
+        return (x - 2, y + 2)
+    if -pi/4 - delta < compass < -pi/4 + delta:
+        return (x + 2, y - 2)
+    
+    return (x, y)
+    

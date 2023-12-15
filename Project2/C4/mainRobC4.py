@@ -42,6 +42,7 @@ class MyRob(CRobLinkAngs):
         paths = []                              # Paths
         prev_target = (0, 0)                    # Previous target
         target = (2, 0)                         # Target
+        line = self.measures.lineSensor         # Line sensor values
         HISTORY_SIZE = 9                        # History size
         history = deque(maxlen=HISTORY_SIZE)    # History of sensor values
         candidate_targets = []                  # Candidate targets
@@ -55,10 +56,10 @@ class MyRob(CRobLinkAngs):
         compass = 0                         # Compass
         left_power = 0                      # Left motor power
         right_power = 0                     # Right motor power
-        ROTATION_SPEED = 0.08               # Rotation speed
+        ROTATION_SPEED = 0.001              # Rotation speed
         MAX_SPEED = 0.15                    # Max speed
         ROTATION_THRESHOLD = pi / 12        # Rotation threshold
-        ROTATION_SLOWDOWN_THRESHOLD = 15    # Rotation slowdown threshold
+        ROTATION_SLOWDOWN_THRESHOLD = 20    # Rotation slowdown threshold
         STEP = 0.08
 
         MAP_ROWS=21
@@ -81,9 +82,10 @@ class MyRob(CRobLinkAngs):
         g.set_beacon_count(self.nBeacons)
 
         def rotate_on_spot():
-            nonlocal coordinates, target, compass, ROTATION_SPEED, ROTATION_SLOWDOWN_THRESHOLD, MAX_SPEED, out, theta, left_power, right_power
+            nonlocal coordinates, target, compass, ROTATION_SPEED, ROTATION_SLOWDOWN_THRESHOLD, MAX_SPEED, out, theta, left_power, right_power, line
             while abs(error := angular_deviation(coordinates, target, compass)) > ROTATION_THRESHOLD:
                 self.readSensors()
+                line = self.measures.lineSensor
                 compass = radians(self.measures.compass)
 
                 error = calculate_rotation_error(error, degrees(compass), ROTATION_SPEED, ROTATION_SLOWDOWN_THRESHOLD, MAX_SPEED)
@@ -95,7 +97,7 @@ class MyRob(CRobLinkAngs):
                 self.driveMotors(*out)
         
         def move_to_closest_unknown():
-            nonlocal coordinates, target, compass, ROTATION_SPEED, ROTATION_SLOWDOWN_THRESHOLD, MAX_SPEED, out, theta, left_power, right_power, prev_target, target, STEP, g
+            nonlocal coordinates, target, compass, ROTATION_SPEED, ROTATION_SLOWDOWN_THRESHOLD, MAX_SPEED, out, theta, left_power, right_power, prev_target, target, STEP, g, line
             # Get the path to the closest unknown
             path, _ = g.bfs_unknowns(prev_target)
             path = path[1:]
@@ -144,7 +146,7 @@ class MyRob(CRobLinkAngs):
                 self.driveMotors(*out)
 
         def move_to_start_and_finish():
-            nonlocal coordinates, target, compass, ROTATION_SPEED, ROTATION_SLOWDOWN_THRESHOLD, MAX_SPEED, out, theta, left_power, right_power, prev_target, target, PLANNING_FILENAME, STEP, g
+            nonlocal coordinates, target, compass, ROTATION_SPEED, ROTATION_SLOWDOWN_THRESHOLD, MAX_SPEED, out, theta, left_power, right_power, prev_target, target, PLANNING_FILENAME, STEP, g, line
             # Get the path to the start
             path = g.astar(old_target, g.start)
 
@@ -154,7 +156,7 @@ class MyRob(CRobLinkAngs):
                         
             if path is None:
                 self.finish()
-                return False
+                quit()
 
             path = path[1:]
             print(f"beacon path: {path}")
@@ -197,9 +199,8 @@ class MyRob(CRobLinkAngs):
                 self.driveMotors(*out)
 
             # write map to file
-            self.finish()
-            return True
-        
+            self.finish()        
+            quit()
 
         ### START CHALLENGE ##
         self.readSensors()
@@ -214,7 +215,7 @@ class MyRob(CRobLinkAngs):
             
             pmap, paths = update_map_start(line, compass, pmap, MAP_START, paths)
 
-            if  -25 < compass < -4: break
+            if  -20 < compass < -4: break
 
             error = ROTATION_SPEED if compass % 45 < ROTATION_SLOWDOWN_THRESHOLD else MAX_SPEED
 
@@ -316,17 +317,38 @@ class MyRob(CRobLinkAngs):
                 write_map_to_file(pmap, MAPPING_FILENAME)
                 # go forward a bit
 
-            ### Filter 
-            if is_far(coordinates, target, 1.9):
-                
+                self.readSensors()
+                line = self.measures.lineSensor
+                left_power, right_power = 0.15, 0.15
+                coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
+                out = (left_power, right_power)
+                self.driveMotors(*out)
+
+                ### Filter                     
                 print("TIAGOVSKI PAYSAFES")
+                print(f"{target=}")
                 while True:
                     if "1" in line[2:5]:
+                        print(line)
+                        target = correct_target(prev_target, compass)
+                        print(f"{target=}")
                         break
+
+                    g.remove_edge(prev_target, target)
+                    print(f"{paths=}")
+                    print(f"{candidate_targets=}")
+                    print(f"{target=}")
+                    print(f"{translated_map_updates=}")
+                    print(f"{map_updates=}")
+                    dt = translated_map_updates[target]
+                    dt_pos = map_updates[dt]
+                    dt_y, dt_x = dt_pos
+                    pmap[dt_y][dt_x] = " "
 
                     self.readSensors()
                     line = self.measures.lineSensor
                     compass = self.measures.compass
+
 
                     if not candidate_targets:
                         while True:
@@ -337,7 +359,7 @@ class MyRob(CRobLinkAngs):
                             
                             pmap, paths = update_map_start(line, compass, pmap, MAP_START, paths)
 
-                            if  -18 < compass < -4: break
+                            if  -20 < compass < -4: break
 
                             error = ROTATION_SPEED if compass % 45 < ROTATION_SLOWDOWN_THRESHOLD else MAX_SPEED
 
@@ -349,7 +371,19 @@ class MyRob(CRobLinkAngs):
                         break
                     
                     target = candidate_targets.pop(0)
-                    rotate_on_spot()
+
+                    while abs(error := angular_deviation(coordinates, target, compass)) > ROTATION_THRESHOLD:
+                        self.readSensors()
+                        line = self.measures.lineSensor
+                        compass = radians(self.measures.compass)
+
+                        error = calculate_rotation_error(error, degrees(compass), ROTATION_SPEED, ROTATION_SLOWDOWN_THRESHOLD, MAX_SPEED)
+
+                        left_power, right_power = -error, error
+
+                        coordinates, theta = general_movement_model(left_power, right_power, out, theta, coordinates)
+                        out = (left_power, right_power)
+                        self.driveMotors(*out)
 
             # Fixate coordinates with respect to axis of movement
             if cm_error == 0:
