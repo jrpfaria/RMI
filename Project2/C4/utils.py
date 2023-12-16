@@ -409,8 +409,8 @@ def centered_line(line, n_sensors):
 
 def scan_paths(lineHistory, target):
     paths = []
-    for line, _ in lineHistory:
-        print(line)
+    # for line, _ in lineHistory:
+    #     print(line)
     paths.extend(scan_center(lineHistory[-1], target))
     paths.extend(scan_sides(lineHistory[0:-1], target, paths))
     return set(paths)
@@ -567,39 +567,22 @@ def help_robot(coordinates, compass, delta=15):
 
     return (0, 0)
 
-def update_map_start(line, compass, pmap, map_start, paths):
-    mx, my = map_start
+def calculate_control_constants(coordinates, prev_target, target, MAX_SPEED):
+    tx, ty = target
+    px, py = prev_target
 
-    if '1' in line[2:5]:
-        if -10 < compass < 10:
-            pmap[my][mx + 1] = "-"
-            paths.append((2, 0))
-        elif 35 < compass < 55:                    
-            pmap[my - 1][mx + 1] = "/"
-            paths.append((2, 2))
-        elif 80 < compass < 100:
-            pmap[my - 1][mx] = "|"
-            paths.append((0, 2))
-        elif 125 < compass < 145: 
-            pmap[my - 1][mx - 1] = "\\"
-            paths.append((-2, -2))
-        elif 170 < compass < 180 or -180 < compass < -170:
-            pmap[my][mx - 1] = "-"
-            paths.append((-2, 0))
-        elif -145 < compass < -125:
-            pmap[my + 1][mx - 1] = "/"
-            paths.append((-2, -2))
-        elif -100 < compass < -80:
-            pmap[my + 1][mx] = "|"
-            paths.append((0, -2))
-        elif -55 < compass < -35:
-            pmap[my + 1][mx + 1] = "\\" 
-            paths.append((2, -2)) 
+    dx = tx - px
+    dy = ty - py
 
-    return (pmap, paths)
+    angle = round(degrees(atan2(dy, dx)))
 
-def calculate_control_constants(coordinates, target, MAX_SPEED):
-    if is_close(coordinates, target, 0.3):
+    if angle in [0, 90, 180, -90, -180]:
+        return calculate_control_constants_straight(coordinates, prev_target, target, MAX_SPEED)
+    return calculate_control_constants_homo(coordinates, prev_target, target, MAX_SPEED)
+
+
+def calculate_control_constants_straight(coordinates, prev_target, target, MAX_SPEED):
+    if is_close(coordinates, target, 0.438):
         cm_Kp = 0
         ad_Kp = 0
         base_speed = 0.10
@@ -613,7 +596,31 @@ def calculate_control_constants(coordinates, target, MAX_SPEED):
         cm_Kp = 4
         ad_Kp = 0
         base_speed = MAX_SPEED
-        n_sensors = 7
+        n_sensors = 7 
+    else:
+        cm_Kp = 0
+        ad_Kp = -3
+        base_speed = MAX_SPEED
+        n_sensors = 3
+
+    return cm_Kp, ad_Kp, base_speed, n_sensors
+
+def calculate_control_constants_homo(coordinates, prev_target, target, MAX_SPEED):
+    if is_close(coordinates, target, 0.438):
+        cm_Kp = 0
+        ad_Kp = 0
+        base_speed = 0.10
+        n_sensors = 3
+    elif is_close(coordinates, target, 2.4):
+        cm_Kp = 1
+        ad_Kp = 0
+        base_speed = 0.10
+        n_sensors = 3
+    elif is_close(coordinates, target, 2.7):
+        cm_Kp = 4
+        ad_Kp = 0
+        base_speed = MAX_SPEED
+        n_sensors = 7 
     else:
         cm_Kp = 0
         ad_Kp = -3
@@ -658,7 +665,6 @@ def update_map(paths, pmap, map_start, prev_target, target):
     # x descer -> -1
 
     angle = round(degrees(atan2(dy, dx)))
-
 
     direction_symbols = {
         'fwd': {
@@ -764,3 +770,67 @@ def correct_target(coordinates, compass, delta=15):
     
     return (x, y)
     
+def undo_map_update(target, pmap, translated_map_updates, map_updates):
+    dt = translated_map_updates[target]
+    dt_pos = map_updates[dt]
+    dt_y, dt_x = dt_pos
+    pmap[dt_y][dt_x] = " "
+    return pmap
+
+def find_paths_on_rotation(line, compass, coordinates, paths):
+    x, y = coordinates
+
+    if '1' in line[2:5]:
+        if -10 < compass < 10:
+            paths.append((x + 2, y))
+        elif 35 < compass < 55:
+            paths.append((x + 2, y + 2))
+        elif 80 < compass < 100:
+            paths.append((x, y + 2))
+        elif 125 < compass < 145:
+            paths.append((x - 2, y + 2))
+        elif 170 < compass < 180 or -180 < compass < -170:
+            paths.append((x - 2, y))
+        elif -145 < compass < -125:
+            paths.append((x - 2, y - 2))
+        elif -100 < compass < -80:
+            paths.append((x, y - 2))
+        elif -55 < compass < -35:
+            paths.append((x + 2, y - 2))
+
+    return paths
+
+def update_map_start(line, compass, pmap, map_start, target, paths):
+    mx, my = map_start
+    x, y = target
+
+    tx = mx + x
+    ty = my - y
+
+    if '1' in line[2:5]:
+        if -10 <= compass <= 10:
+            pmap[ty][tx + 1] = "-"
+            paths.append((x + 2, y))
+        elif 35 <= compass <= 55:                    
+            pmap[ty - 1][tx + 1] = "/"
+            paths.append((x + 2, y + 2))
+        elif 80 <= compass <= 100:
+            pmap[ty - 1][tx] = "|"
+            paths.append((x, y + 2))
+        elif 125 <= compass <= 145: 
+            pmap[ty - 1][tx - 1] = "\\"
+            paths.append((x - 2, y + 2))
+        elif 170 <= compass <= 180 or -180 <= compass <= -170:
+            pmap[ty][tx - 1] = "-"
+            paths.append((x - 2, y))
+        elif -145 <= compass <= -125:
+            pmap[ty + 1][tx - 1] = "/"
+            paths.append((x - 2, y - 2))
+        elif -100 <= compass <= -80:
+            pmap[ty + 1][tx] = "|"
+            paths.append((x, y - 2))
+        elif -55 <= compass <= -35:
+            pmap[ty + 1][tx + 1] = "\\" 
+            paths.append((x + 2, y - 2))
+
+    return (pmap, paths)
