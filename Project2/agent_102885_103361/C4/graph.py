@@ -10,6 +10,10 @@ class Graph:
         self.beacons = {}
         self.beacon_count = 0
         self.start = None
+        self.limits = None
+
+    def set_limits(self, limits):
+        self.limits = limits
 
     def set_start(self, start):
         self.start = start
@@ -29,10 +33,16 @@ class Graph:
 
         return beacon_edges
 
+    def _on_limits(self, node):
+        limit_x, limit_y = self.limits
+        node_x, node_y = node
+        return (0 <= abs(node_x) <= limit_x) and (0 <= abs(node_y) <= limit_y)
+
     def add_node(self, node):
-        self.nodes.add(node)
-        if node not in self.edges:
-            self.edges[node] = {}
+        if self._on_limits(node):
+            self.nodes.add(node)
+            if node not in self.edges:
+                self.edges[node] = {}
 
     def add_edges_from(self, edges):
         for edge in edges:
@@ -42,10 +52,17 @@ class Graph:
             else:
                 node1, node2 = edge
                 self.add_edge(node1, node2)
+
+    def remove_node(self, node):
+        self.nodes.discard(node)
+        self.visited.discard(node)
+        self.edges.pop(node, None)
+        for n in self.edges:
+            self.edges[n].pop(node, None)
     
     def remove_edge(self, node1, node2):
-        self.edges[node1].pop(node2, None)
-        self.edges[node2].pop(node1, None)
+        self.edges.get(node1, {}).pop(node2, None)
+        self.edges.get(node2, {}).pop(node1, None)
 
     def add_connections(self, node, nodes):
         for n in nodes:
@@ -56,18 +73,19 @@ class Graph:
             self.add_node(node)
 
     def add_edge(self, node1, node2, cost=1):
-        self.add_node(node1)
-        self.add_node(node2)
-        self.edges[node1][node2] = cost
-        self.edges[node2][node1] = cost
+        if self._on_limits(node1) and self._on_limits(node2):
+            self.add_node(node1)
+            self.add_node(node2)
+            self.edges[node1][node2] = cost
+            self.edges[node2][node1] = cost
 
     def add_beacon(self, number, node):
-        self.add_node(node)
-        self.beacons[number] = node
+        if self._on_limits(node):
+            self.beacons[number] = node
     
     def set_visited(self, node):
-        self.add_node(node)
-        self.visited.add(node)
+        if self._on_limits(node):
+            self.visited.add(node)
 
     def astar(self, start, goal):
         open_set = []   # Priority queue for nodes to be evaluated
@@ -110,16 +128,20 @@ class Graph:
         start = self.start
         beacon_edges = self.beacon_edges()
 
+        print("beacon_edges: ", beacon_edges)
+
         total_path = []
         for edge in beacon_edges:
             path, _ = self.astar(edge[0], edge[1])
+            print("beacon path from ", edge[0], " to ", edge[1], ": ", path)
             if path:
                 total_path += path[:-1]
+                last 
 
         if not total_path:
             return total_path, None
             
-        path, goal = self.astar(total_path[-1], start)
+        path, goal = self.astar(beacon_edges[-1], start)
 
         if path:
             total_path += path
