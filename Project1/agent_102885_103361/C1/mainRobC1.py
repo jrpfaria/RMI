@@ -47,11 +47,46 @@ class MyRob(CRobLinkAngs):
         error_history = [0, 0, 0]
         max_history_size = 10
 
+        self.readSensors()
+        
+        beacon_count = int(self.nBeacons)
+
+        after_beacon = False
+        prev_beacon = beacon_count - 1
+        target_beacon = 0
+        counts_after_beacon = 0
+
+        if self.measures.ground != -1:
+            prev_beacon = self.measures.ground
+            target_beacon = (prev_beacon + 1) % beacon_count
+
         while True:
+            
+            print("Prev beacon: ", prev_beacon)
+            print("Target beacon: ", target_beacon)
+            print("After beacon: ", after_beacon)
 
             # Read sensor values (0s and 1s)
             self.readSensors()
-
+            
+            if self.measures.ground != -1:
+                if after_beacon:
+                    after_beacon = False
+                    if self.measures.ground != target_beacon:
+                        for _ in range(12):
+                            self.readSensors()
+                            line = self.measures.lineSensor
+                            self.driveMotors(0.15, -0.15)
+                        continue
+                    else:
+                        prev_beacon = target_beacon
+                        target_beacon = (target_beacon + 1) % beacon_count
+            else:
+                counts_after_beacon += 1
+                if counts_after_beacon > 4:
+                    after_beacon = True
+            
+            
             # print(self.measures.lineSensor)
 
             line = self.measures.lineSensor
