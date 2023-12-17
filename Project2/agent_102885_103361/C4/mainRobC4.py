@@ -341,7 +341,10 @@ class MyRob(CRobLinkAngs):
                 # print(f"paths: {paths}")
 
                 translated_paths, translated_map_updates = translate_paths(paths, old_ptarget, old_target)
-          
+
+                g.add_connections(old_target, translated_paths)
+                print("1. added edge to graph:", old_target, "to", translated_paths)
+
                 # Candidate targets are the paths found that have not been visited
                 candidate_targets, removed_targets = remove_visited(translated_paths, g.visited)
 
@@ -353,12 +356,12 @@ class MyRob(CRobLinkAngs):
                 
                 # Set the previous target as the current target
                 prev_target = old_target
-                
-                g.add_connections(old_target, candidate_targets)
-                
+                                
                 # print(f"target: {target}")
 
                 pmap, map_updates = update_map(paths, pmap, MAP_START, old_ptarget, old_target)
+                print("2. updated to map:", old_target, "to", paths)
+
                 write_map_to_file(pmap, MAPPING_FILENAME)
                 # go forward a bit
 
@@ -385,18 +388,17 @@ class MyRob(CRobLinkAngs):
                             compass = self.measures.compass
 
                             pmap, new_targets = update_map_start(line, compass, pmap, MAP_START, prev_target, new_targets)
-    
+                            
                             write_map_to_file(pmap, MAPPING_FILENAME)
                             
                             # print("compass", compass, " | ", "reference_angles", lower_bound, upper_bound)
         
                             if lower_bound <= compass <= upper_bound:
+                                g.add_connections(prev_target, new_targets)
                                 new_candidate_targets, _ = remove_visited(new_targets, g.visited)
-                                # print("found new paths", new_candidate_targets)
                                 if not new_candidate_targets:
                                     move_to_closest_unknown()
                                 else:
-                                    g.add_connections(prev_target, new_candidate_targets)
                                     target = new_candidate_targets.pop(0)
                                     rotate_on_spot()
                                 break
@@ -423,7 +425,9 @@ class MyRob(CRobLinkAngs):
                     else:
                         # print("nope")
                         g.remove_node(target)
+                        print("5. removed from graph:", target)
                         pmap = undo_map_update(target, pmap, translated_map_updates, map_updates)
+                        print("6. removed from map:", target)
                         write_map_to_file(pmap, MAPPING_FILENAME)
             else:
             

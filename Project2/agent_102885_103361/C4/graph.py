@@ -130,18 +130,20 @@ class Graph:
 
         print("beacon_edges: ", beacon_edges)
 
+        last_node = start
+        
         total_path = []
         for edge in beacon_edges:
             path, _ = self.astar(edge[0], edge[1])
             print("beacon path from ", edge[0], " to ", edge[1], ": ", path)
             if path:
+                last_node = path[-1]
                 total_path += path[:-1]
-                last 
 
         if not total_path:
             return total_path, None
             
-        path, goal = self.astar(beacon_edges[-1], start)
+        path, goal = self.astar(last_node, start)
 
         if path:
             total_path += path
