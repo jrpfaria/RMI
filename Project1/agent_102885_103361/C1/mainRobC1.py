@@ -84,8 +84,8 @@ class MyRob(CRobLinkAngs):
             else:
                 counts_after_beacon += 1
                 if counts_after_beacon > 4:
+                    counts_after_beacon = 0
                     after_beacon = True
-            
             
             # print(self.measures.lineSensor)
 
